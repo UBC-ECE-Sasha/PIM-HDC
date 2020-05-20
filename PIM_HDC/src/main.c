@@ -1,13 +1,57 @@
-#include <stdio.h>
+#include <dpu.h>
+#include <dpu_memory.h>
+#include <dpu_log.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <getopt.h>
+
 #include "associative_memory.h"
 #include "aux_functions.h"
 #include "init.h"
 #include "data.h"
 
+#define DPU_PROGRAM "src/dpu/hdc.dpu"
+
+/* TODO: Remove global */
 float buffer[4];
 
-int main() {
+/**
+ * Prepare the DPU context and upload the program to the DPU.
+ */
+int prepare_dpu() {
+    struct dpu_set_t dpus;
+    struct dpu_set_t dpu;
+
+    // Allocate a DPU
+    DPU_ASSERT(dpu_alloc(1, NULL, &dpus));
+
+    DPU_FOREACH(dpus, dpu) {
+        break;
+    }
+
+    DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
+
+    int ret = dpu_launch(dpu, DPU_SYNCHRONOUS);
+    if (ret != 0) {
+        DPU_ASSERT(dpu_free(dpus));
+        return -1;
+    }
+
+    // Deallocate the DPUs
+    DPU_FOREACH(dpus, dpu) {
+        DPU_ASSERT(dpu_log_read(dpu, stdout));
+    }
+
+    DPU_ASSERT(dpu_free(dpus));
+
+    return 0;
+}
+
+/**
+ * Run HDC algorithm on host
+ */
+static int host_hdc() {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
@@ -68,3 +112,50 @@ int main() {
     return 0;
 }
 
+static void usage(const char* exe_name) {
+#ifdef DEBUG
+	fprintf(stderr, "**DEBUG BUILD**\n");
+#endif
+
+    fprintf(stderr, "usage: %s -d [ -o <output> ]\n", exe_name);
+    fprintf(stderr, "\td: use DPU\n");
+    fprintf(stderr, "\to: redirect output to file\n");
+}
+
+int main(int argc, char **argv) {
+
+    unsigned int use_dpu = 0;
+    char *output_file = NULL; /* TODO: Implement output file */
+
+    int ret = 0;
+    char const options[] = "dho:";
+
+    int opt;
+    while ((opt = getopt(argc, argv, options)) != -1) {
+        switch(opt) {
+            case 'd':
+                use_dpu = 1;
+                break;
+
+            case 'o':
+                output_file = optarg;
+                break;
+
+            case 'h':
+                usage(argv[0]);
+                return EXIT_SUCCESS;
+
+            default:
+                usage(argv[0]);
+                return EXIT_FAILURE;
+        }
+    }
+
+    if (use_dpu) {
+        ret = prepare_dpu();
+    } else {
+        ret = host_hdc();
+    }
+
+    return ret;
+}

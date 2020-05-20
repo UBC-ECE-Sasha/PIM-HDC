@@ -2,6 +2,8 @@
 #define INIT_H_
 
 #include <stdint.h>
+
+// TODO: Must be removed when moved to DPU
 #include <math.h>
 
  //dimension of the hypervectors

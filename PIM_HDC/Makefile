@@ -1,24 +1,33 @@
-TARGET = pim_hdc
-LIBS = -lm
 CC = gcc
-CFLAGS = -g -Wall
+CFLAGS = --std=c11 -O3 -g -Wall -Wextra
+DPU_OPTS = `dpu-pkg-config --cflags --libs dpu`
+TARGET = pim_hdc
+
+# define DEBUG in the source if we are debugging
+ifeq ($(DEBUG), 1)
+	CFLAGS+=-DDEBUG
+endif
 
 .PHONY: default all clean
 
-default: $(TARGET)
+default: $(TARGET) dpu
 all: default
 
-OBJECTS = $(patsubst %.c, %.o, $(wildcard src/*.c))
+SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c)
+OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
 INC=-Iinclude
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) $(INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 
 $(TARGET): $(OBJECTS)
-	$(CC) $(OBJECTS) -Wall $(LIBS) $(INC) -o $@
+	$(CC) $(OBJECTS) $(INC) -o $@ $(DPU_OPTS)
+
+dpu:
+	DEBUG=$(DEBUG) NR_TASKLETS=$(NR_TASKLETS) $(MAKE) -C src/dpu
 
 clean:
 	-rm -f */*.o
