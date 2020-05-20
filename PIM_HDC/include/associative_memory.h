@@ -3,6 +3,6 @@
 
 #include "init.h"
 
-int associative_memory_32bit(uint32_t q_32[bit_dim + 1], uint32_t aM_32[][bit_dim + 1]);
+int associative_memory_32bit(uint32_t q_32[BIT_DIM + 1], uint32_t aM_32[][BIT_DIM + 1]);
 
 #endif

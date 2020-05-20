@@ -2,7 +2,7 @@
 
 #define ROUND(num) ((num - floorf(num) > 0.5f) ? ceilf(num) : floorf(num))
 
-int max_dist_hamm(int distances[classes]) {
+int max_dist_hamm(int distances[CLASSES]) {
 /*************************************************************************
     DESCRIPTION: computes the maximum Hamming Distance.
 
@@ -14,8 +14,8 @@ int max_dist_hamm(int distances[classes]) {
     int max = distances[0];
     int max_index = 0;
 
-    for(int i = 1; i < classes; i++) {
-        if(max > distances[i]) {
+    for (int i = 1; i < CLASSES; i++) {
+        if (max > distances[i]) {
             max = distances[i];
             max_index = i;
         }
@@ -24,7 +24,7 @@ int max_dist_hamm(int distances[classes]) {
     return max_index;
 }
 
-void hamming_dist(uint32_t q[bit_dim + 1], uint32_t aM[][bit_dim + 1], int sims[classes]){
+void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[CLASSES]){
 /**************************************************************************
     DESCRIPTION: computes the Hamming Distance for each class.
 
@@ -39,8 +39,8 @@ void hamming_dist(uint32_t q[bit_dim + 1], uint32_t aM[][bit_dim + 1], int sims[
     int r_tmp = 0;
 
     uint32_t tmp = 0;
-    for(int i = 0; i < classes; i++) {
-        for(int j = 0; j < bit_dim + 1; j++) {
+    for (int i = 0; i < CLASSES; i++) {
+        for (int j = 0; j < BIT_DIM + 1; j++) {
             tmp = q[j] ^ aM[i][j];
             r_tmp += numberOfSetBits(tmp);
         }
@@ -51,51 +51,51 @@ void hamming_dist(uint32_t q[bit_dim + 1], uint32_t aM[][bit_dim + 1], int sims[
 
 }
 
-uint32_t chHV[channels + 1][bit_dim + 1] = {0};
+uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
 
-void computeNgram(float buffer[channels], uint32_t iM[][bit_dim + 1], uint32_t chAM[][bit_dim + 1], uint32_t query[bit_dim + 1]){
+void computeNgram(float buffer[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t chAM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]){
 /*************************************************************************
     DESCRIPTION: computes the N-gram
 
     INPUTS:
         buffer   :  input data
-        iM       :	Item Memory for the IDs of channels
+        iM       :	Item Memory for the IDs of CHANNELS
         chAM     :  Continuous Item Memory for the values of a channel
     OUTPUTS:
         query    :  query hypervector
 **************************************************************************/
 
-    int r[channels];
+    int r[CHANNELS];
 
     int ix;
     uint32_t tmp = 0;
     int i, j;
-    uint32_t chHV[channels + 1][bit_dim + 1] = {0};
+    uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
 
-    //Quantization: each sample is rounded to the nearest integer
-    for(i = 0; i < channels ; i++) {
+    // Quantization: each sample is rounded to the nearest integer
+    for (i = 0; i < CHANNELS ; i++) {
         r[i] = (int)(ROUND((float)buffer[i]));
     }
 
-    for(i = 0; i < bit_dim + 1; i++) {
+    for (i = 0; i < BIT_DIM + 1; i++) {
         query[i] = 0;
-        for(j = 0; j < channels; j++) {
+        for (j = 0; j < CHANNELS; j++) {
             ix = r[j];
             tmp = iM[ix][i] ^ chAM[j][i];
             chHV[j][i] = tmp;
         }
 
-        //this is done to make the dimension of the matrix for the componentwise majority odd.
-        chHV[channels][i] = chHV[0][i] ^ chHV[1][i];
+        // this is done to make the dimension of the matrix for the componentwise majority odd.
+        chHV[CHANNELS][i] = chHV[0][i] ^ chHV[1][i];
 
-        //componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
-        //and then compute the number of 1's with the function numberOfSetBits(uint32_t).
+        // componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
+        // and then compute the number of 1's with the function numberOfSetBits(uint32_t).
 
         uint32_t majority = 0;
 
-        for(int z = 31; z >= 0; z--) {
+        for (int z = 31; z >= 0; z--) {
 
-            for(int j = 0 ; j < channels + 1; j++) {
+            for (int j = 0 ; j < CHANNELS + 1; j++) {
                 majority = majority | (((chHV[j][i] & ( 1 << z)) >> z) << j);
             }
 

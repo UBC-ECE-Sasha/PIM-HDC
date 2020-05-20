@@ -1,18 +1,18 @@
 #include "associative_memory.h"
 #include "aux_functions.h"
 
-int associative_memory_32bit(uint32_t q_32[bit_dim + 1], uint32_t aM_32[][bit_dim + 1]) {
+int associative_memory_32bit(uint32_t q_32[BIT_DIM + 1], uint32_t aM_32[][BIT_DIM + 1]) {
 /*************************************************************************
     DESCRIPTION:  tests the accuracy based on input testing queries
 
     INPUTS:
         q_32        : query hypervector
         aM_32		: Trained associative memory
-    OUYTPUTS:
+    OUTPUTS:
         class       : classification result
 **************************************************************************/
 
-    int sims[classes] = {0};
+    int sims[CLASSES] = {0};
     int class;
 
     //Computes Hamming Distances

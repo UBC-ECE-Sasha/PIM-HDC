@@ -13,9 +13,6 @@
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
-/* TODO: Remove global */
-float buffer[4];
-
 /**
  * Prepare the DPU context and upload the program to the DPU.
  */
@@ -55,15 +52,17 @@ static int host_hdc() {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
-    uint32_t q[bit_dim + 1] = {0};
-    uint32_t q_N[bit_dim + 1] = {0};
+    uint32_t q[BIT_DIM + 1] = {0};
+    uint32_t q_N[BIT_DIM + 1] = {0};
     int class;
+
+    float buffer[CHANNELS];
 
     for(int ix = 0; ix < NUMBER_OF_INPUT_SAMPLES; ix = ix + N) {
 
         for(int z = 0; z < N; z++) {
 
-            for(int j = 0; j < channels; j++) {
+            for(int j = 0; j < CHANNELS; j++) {
                 buffer[j] = TEST_SET[j][ix + z];
             }
 
@@ -78,7 +77,7 @@ static int host_hdc() {
                 //before performing the componentwise XOR operation with the new query (q_N).
                 overflow = q[0] & mask;
 
-                for(int i = 1; i < bit_dim; i++){
+                for(int i = 1; i < BIT_DIM; i++){
 
                     old_overflow = overflow;
                     overflow = q[i] & mask;
@@ -88,9 +87,9 @@ static int host_hdc() {
                 }
 
                 old_overflow = overflow;
-                overflow = (q[bit_dim] >> 16) & mask;
-                q[bit_dim] = (q[bit_dim] >> 1) | (old_overflow << (32 - 1));
-                q[bit_dim] = q_N[bit_dim] ^ q[bit_dim];
+                overflow = (q[BIT_DIM] >> 16) & mask;
+                q[BIT_DIM] = (q[BIT_DIM] >> 1) | (old_overflow << (32 - 1));
+                q[BIT_DIM] = q_N[BIT_DIM] ^ q[BIT_DIM];
 
                 q[0] = (q[0] >> 1) | (overflow << (32 - 1));
                 q[0] = q_N[0] ^ q[0];
@@ -112,7 +111,7 @@ static int host_hdc() {
     return 0;
 }
 
-static void usage(const char* exe_name) {
+static void usage(char const * exe_name) {
 #ifdef DEBUG
 	fprintf(stderr, "**DEBUG BUILD**\n");
 #endif

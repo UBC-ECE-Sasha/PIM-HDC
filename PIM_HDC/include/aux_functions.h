@@ -1,11 +1,11 @@
 #ifndef AUX_FUNCTIONS_H_
 #define AUX_FUNCTIONS_H_
- 
+
 #include "init.h"
 
-void hamming_dist(uint32_t q[bit_dim + 1], uint32_t aM[][bit_dim + 1], int sims[classes]);
-int max_dist_hamm(int distances[classes]);
-void computeNgram(float buffer[channels], uint32_t iM[][bit_dim + 1], uint32_t chAM[][bit_dim + 1], uint32_t query[bit_dim + 1]);
+void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[CLASSES]);
+int max_dist_hamm(int distances[CLASSES]);
+void computeNgram(float buffer[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t chAM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]);
 int numberOfSetBits(uint32_t i);
 
 #endif
