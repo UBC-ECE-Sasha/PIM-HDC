@@ -57,6 +57,7 @@ static int host_hdc() {
     int class;
 
     float buffer[CHANNELS];
+    int quantized_buffer[CHANNELS];
 
     for(int ix = 0; ix < NUMBER_OF_INPUT_SAMPLES; ix = ix + N) {
 
@@ -66,12 +67,14 @@ static int host_hdc() {
                 buffer[j] = TEST_SET[j][ix + z];
             }
 
+            quantize(buffer, quantized_buffer);
+
             //Spatial and Temporal Encoder: computes the N-gram.
             //N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                computeNgram(buffer, iM, chAM, q);
+                computeNgram(quantized_buffer, iM, chAM, q);
             } else {
-                computeNgram(buffer, iM, chAM, q_N);
+                computeNgram(quantized_buffer, iM, chAM, q_N);
 
                 //Here the hypervetor q is shifted by 1 position as permutation,
                 //before performing the componentwise XOR operation with the new query (q_N).

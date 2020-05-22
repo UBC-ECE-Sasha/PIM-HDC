@@ -1,6 +1,26 @@
 #include "aux_functions.h"
 
-#define ROUND(num) ((num - floorf(num) > 0.5f) ? ceilf(num) : floorf(num))
+/**
+ * @brief Round a float to an integer.
+ *
+ * @param[in] num Float to round
+ * @return        Rounded integer value
+ */
+static int round_to_int(float num) {
+    return (num - floorf(num) > 0.5f) ? ceilf(num) : floorf(num);
+}
+
+/**
+ * @brief Quantization: each sample is rounded to the nearest integer.
+ *
+ * @param[in]  input_buffer  Input array of floats to round
+ * @param[out] output_buffer Rounded integers
+ */
+void quantize(float input_buffer[CHANNELS], int output_buffer[CHANNELS]) {
+    for (int i = 0; i < CHANNELS ; i++) {
+        output_buffer[i] = round_to_int(input_buffer[i]);
+    }
+}
 
 int max_dist_hamm(int distances[CLASSES]) {
 /*************************************************************************
@@ -51,9 +71,7 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
 
 }
 
-uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
-
-void computeNgram(float buffer[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t chAM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]){
+void computeNgram(int input[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t chAM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]){
 /*************************************************************************
     DESCRIPTION: computes the N-gram
 
@@ -65,22 +83,15 @@ void computeNgram(float buffer[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t c
         query    :  query hypervector
 **************************************************************************/
 
-    int r[CHANNELS];
-
     int ix;
     uint32_t tmp = 0;
     int i, j;
     uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
 
-    // Quantization: each sample is rounded to the nearest integer
-    for (i = 0; i < CHANNELS ; i++) {
-        r[i] = (int)(ROUND((float)buffer[i]));
-    }
-
     for (i = 0; i < BIT_DIM + 1; i++) {
         query[i] = 0;
         for (j = 0; j < CHANNELS; j++) {
-            ix = r[j];
+            ix = input[j];
             tmp = iM[ix][i] ^ chAM[j][i];
             chHV[j][i] = tmp;
         }
