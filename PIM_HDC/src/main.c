@@ -72,9 +72,9 @@ static int host_hdc() {
             //Spatial and Temporal Encoder: computes the N-gram.
             //N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                computeNgram(quantized_buffer, iM, chAM, q);
+                compute_N_gram(quantized_buffer, iM, chAM, q);
             } else {
-                computeNgram(quantized_buffer, iM, chAM, q_N);
+                compute_N_gram(quantized_buffer, iM, chAM, q_N);
 
                 //Here the hypervetor q is shifted by 1 position as permutation,
                 //before performing the componentwise XOR operation with the new query (q_N).
