@@ -3,10 +3,7 @@
 
 #include <stdint.h>
 
-// TODO: Must be removed when moved to DPU
-#include <math.h>
-
- //dimension of the hypervectors
+//dimension of the hypervectors
 #define DIMENSION 10000
 //number of CLASSES to be classify
 #define CLASSES 5
