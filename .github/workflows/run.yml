@@ -1,0 +1,21 @@
+name: Run
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: johnramsden/upmem
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: cd PIM_HDC && make
+      - name: Run on host
+        run: cd PIM_HDC && ./pim_hdc
+      - name: Run on DPU
+        run: cd PIM_HDC && ./pim_hdc -d
