@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 
 #include "host_only.h"
 
@@ -17,10 +18,10 @@ int round_to_int(float num) {
  *
  * @param[out] buffer Rounded integers
  */
-void quantize_set(float input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES], int buffer[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
+void quantize_set(float input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES], int32_t * buffer) {
     for(int i = 0; i < CHANNELS; i++) {
         for(int j = 0; j < NUMBER_OF_INPUT_SAMPLES; j++) {
-            buffer[i][j] = round_to_int(input_set[i][j]);
+            buffer[(i * NUMBER_OF_INPUT_SAMPLES) + j] = round_to_int(input_set[i][j]);
         }
     }
 }

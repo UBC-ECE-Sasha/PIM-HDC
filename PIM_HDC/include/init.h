@@ -20,4 +20,9 @@
 
 #define TEST 1
 
+typedef struct in_buffer {
+    int32_t * buffer;
+    uint32_t buffer_size;
+} in_buffer;
+
 #endif

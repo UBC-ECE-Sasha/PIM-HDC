@@ -18,10 +18,12 @@
 /**
  * Prepare the DPU context and upload the program to the DPU.
  */
-static int prepare_dpu(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
-    (void)input_set;
+static int prepare_dpu(in_buffer data_set) {
+
     struct dpu_set_t dpus;
     struct dpu_set_t dpu;
+
+    uint32_t input_buffer_start = 1024 * 1024;
 
     // Allocate a DPU
     DPU_ASSERT(dpu_alloc(1, NULL, &dpus));
@@ -31,6 +33,10 @@ static int prepare_dpu(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
     }
 
     DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
+
+    DPU_ASSERT(dpu_copy_to(dpu, "input_buffer", 0, &input_buffer_start, sizeof(input_buffer_start)));
+
+    DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, input_buffer_start, (uint8_t *)data_set.buffer, data_set.buffer_size, 0));
 
     int ret = dpu_launch(dpu, DPU_SYNCHRONOUS);
     if (ret != 0) {
@@ -51,7 +57,7 @@ static int prepare_dpu(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
 /**
  * Run HDC algorithm on host
  */
-static int host_hdc(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
+static int host_hdc(int32_t *data_set) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
@@ -59,7 +65,7 @@ static int host_hdc(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
     uint32_t q_N[BIT_DIM + 1] = {0};
     int class = 0;
 
-    int quantized_buffer[CHANNELS];
+    int32_t quantized_buffer[CHANNELS];
 
     for(int ix = 0; ix < NUMBER_OF_INPUT_SAMPLES; ix = ix + N) {
 
@@ -71,7 +77,7 @@ static int host_hdc(int input_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES]) {
                     // Original code:
                     // quantized_buffer[j] = round_to_int(TEST_SET[j][ix + z]);
 
-                    quantized_buffer[j] = input_set[j][ix + z];
+                    quantized_buffer[j] = data_set[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z];
                 }
             }
 
@@ -133,9 +139,6 @@ static void usage(char const * exe_name) {
 int main(int argc, char **argv) {
 
     unsigned int use_dpu = 0;
-    char *output_file = NULL; /* TODO: Implement output file */
-    (void)output_file;
-
     int ret = 0;
     char const options[] = "dho:";
 
@@ -144,10 +147,6 @@ int main(int argc, char **argv) {
         switch(opt) {
             case 'd':
                 use_dpu = 1;
-                break;
-
-            case 'o':
-                output_file = optarg;
                 break;
 
             case 'h':
@@ -160,14 +159,24 @@ int main(int argc, char **argv) {
         }
     }
 
-    int data_set[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
-    quantize_set(TEST_SET, data_set);
+    uint32_t buffer_size = (sizeof(int32_t) * NUMBER_OF_INPUT_SAMPLES * CHANNELS);
+    in_buffer data_set;
+
+    data_set.buffer_size = ALIGN(buffer_size, 8);
+
+    if ((data_set.buffer = malloc(data_set.buffer_size)) == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    quantize_set(TEST_SET, data_set.buffer);
 
     if (use_dpu) {
         ret = prepare_dpu(data_set);
     } else {
-        ret = host_hdc(data_set);
+        ret = host_hdc(data_set.buffer);
     }
+
+    free(data_set.buffer);
 
     return ret;
 }

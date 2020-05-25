@@ -1,13 +1,15 @@
 CC           = dpu-upmem-dpurte-clang
-CFLAGS       = -O2 -flto -g -Wall
+CFLAGS       = --std=c11 -O2 -flto -g -Wall
 
 # define DEBUG in the source if we are debugging
 ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
 
-SOURCES = dpu_task.c
+SOURCES = dpu_task.c $(wildcard ../hdc/*.c)
 HDC_DPU = hdc.dpu
+
+INC=-I../../include
 
 .PHONY: default all clean
 
@@ -19,4 +21,4 @@ clean:
 	$(RM) $(HDC_DPU)
 
 $(HDC_DPU): $(SOURCES)
-	$(CC) $(CFLAGS)  $^ -o $@
+	$(CC) $(CFLAGS) $(INC)  $^ -o $@

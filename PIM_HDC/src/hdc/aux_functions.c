@@ -51,7 +51,7 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
  * @param[in] channel_AM  Continuous Item Memory for the values of a channel
  * @param[out] query      Query hypervector
  */
-void compute_N_gram(int input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1], uint32_t channel_AM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]) {
+void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1], uint32_t channel_AM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]) {
 
     int ix;
     uint32_t tmp = 0;
