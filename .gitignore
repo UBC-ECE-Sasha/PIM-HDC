@@ -1,3 +1,7 @@
 PIM_HDC/pim_hdc
 
 PIM_HDC/.idea/
+
+PIM_HDC/src/dpu/hdc.dpu
+
+*.o

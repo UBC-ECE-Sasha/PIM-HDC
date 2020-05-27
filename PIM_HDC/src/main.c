@@ -5,20 +5,25 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <getopt.h>
+#include <assert.h>
 
 #include "associative_memory.h"
 #include "aux_functions.h"
 #include "init.h"
 #include "data.h"
+#include "host_only.h"
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
 /**
  * Prepare the DPU context and upload the program to the DPU.
  */
-int prepare_dpu() {
+static int prepare_dpu(in_buffer data_set) {
+
     struct dpu_set_t dpus;
     struct dpu_set_t dpu;
+
+    uint32_t input_buffer_start = 1024 * 1024;
 
     // Allocate a DPU
     DPU_ASSERT(dpu_alloc(1, NULL, &dpus));
@@ -28,6 +33,10 @@ int prepare_dpu() {
     }
 
     DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
+
+    DPU_ASSERT(dpu_copy_to(dpu, "input_buffer", 0, &input_buffer_start, sizeof(input_buffer_start)));
+
+    DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, input_buffer_start, (uint8_t *)data_set.buffer, data_set.buffer_size, 0));
 
     int ret = dpu_launch(dpu, DPU_SYNCHRONOUS);
     if (ret != 0) {
@@ -48,35 +57,38 @@ int prepare_dpu() {
 /**
  * Run HDC algorithm on host
  */
-static int host_hdc() {
+static int host_hdc(int32_t *data_set) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
     uint32_t q[BIT_DIM + 1] = {0};
     uint32_t q_N[BIT_DIM + 1] = {0};
-    int class;
+    int class = 0;
 
-    float buffer[CHANNELS];
-    int quantized_buffer[CHANNELS];
+    int32_t quantized_buffer[CHANNELS];
 
     for(int ix = 0; ix < NUMBER_OF_INPUT_SAMPLES; ix = ix + N) {
 
         for(int z = 0; z < N; z++) {
 
             for(int j = 0; j < CHANNELS; j++) {
-                buffer[j] = TEST_SET[j][ix + z];
+                // NOTE: Buffer overflow in original code?
+                if (ix + z < NUMBER_OF_INPUT_SAMPLES) {
+                    // Original code:
+                    // quantized_buffer[j] = round_to_int(TEST_SET[j][ix + z]);
+
+                    quantized_buffer[j] = data_set[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z];
+                }
             }
 
-            quantize(buffer, quantized_buffer);
-
-            //Spatial and Temporal Encoder: computes the N-gram.
-            //N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
+            // Spatial and Temporal Encoder: computes the N-gram.
+            // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
                 compute_N_gram(quantized_buffer, iM, chAM, q);
             } else {
                 compute_N_gram(quantized_buffer, iM, chAM, q_N);
 
-                //Here the hypervetor q is shifted by 1 position as permutation,
+                //Here the hypervector q is shifted by 1 position as permutation,
                 //before performing the componentwise XOR operation with the new query (q_N).
                 overflow = q[0] & mask;
 
@@ -127,8 +139,6 @@ static void usage(char const * exe_name) {
 int main(int argc, char **argv) {
 
     unsigned int use_dpu = 0;
-    char *output_file = NULL; /* TODO: Implement output file */
-
     int ret = 0;
     char const options[] = "dho:";
 
@@ -137,10 +147,6 @@ int main(int argc, char **argv) {
         switch(opt) {
             case 'd':
                 use_dpu = 1;
-                break;
-
-            case 'o':
-                output_file = optarg;
                 break;
 
             case 'h':
@@ -153,11 +159,24 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (use_dpu) {
-        ret = prepare_dpu();
-    } else {
-        ret = host_hdc();
+    uint32_t buffer_size = (sizeof(int32_t) * NUMBER_OF_INPUT_SAMPLES * CHANNELS);
+    in_buffer data_set;
+
+    data_set.buffer_size = ALIGN(buffer_size, 8);
+
+    if ((data_set.buffer = malloc(data_set.buffer_size)) == NULL) {
+        return EXIT_FAILURE;
     }
+
+    quantize_set(TEST_SET, data_set.buffer);
+
+    if (use_dpu) {
+        ret = prepare_dpu(data_set);
+    } else {
+        ret = host_hdc(data_set.buffer);
+    }
+
+    free(data_set.buffer);
 
     return ret;
 }

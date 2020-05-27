@@ -30,5 +30,5 @@ dpu:
 	DEBUG=$(DEBUG) NR_TASKLETS=$(NR_TASKLETS) $(MAKE) -C src/dpu
 
 clean:
-	-rm -f */*.o
+	find . -type f -name '*.o' -delete
 	-rm -f $(TARGET)

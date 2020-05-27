@@ -1,28 +1,6 @@
 #include "aux_functions.h"
 
 /**
- * @brief Round a float to an integer.
- *
- * @param[in] num Float to round
- * @return        Rounded integer value
- */
-static int round_to_int(float num) {
-    return (num - floorf(num) > 0.5f) ? ceilf(num) : floorf(num);
-}
-
-/**
- * @brief Quantization: each sample is rounded to the nearest integer.
- *
- * @param[in]  input_buffer  Input array of floats to round
- * @param[out] output_buffer Rounded integers
- */
-void quantize(float input_buffer[CHANNELS], int output_buffer[CHANNELS]) {
-    for (int i = 0; i < CHANNELS ; i++) {
-        output_buffer[i] = round_to_int(input_buffer[i]);
-    }
-}
-
-/**
  * @brief Computes the maximum Hamming Distance.
  *
  * @param[in] distances Distances associated to each class
@@ -68,12 +46,12 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
 /**
  * @brief Computes the N-gram.
  *
- * @param[in] input  Input data
- * @param[in] iM     Item Memory for the IDs of @p CHANNELS
- * @param[in] chAM   Continuous Item Memory for the values of a channel
- * @param[out] query Query hypervector
+ * @param[in] input       Input data
+ * @param[in] channel_iM  Item Memory for the IDs of @p CHANNELS
+ * @param[in] channel_AM  Continuous Item Memory for the values of a channel
+ * @param[out] query      Query hypervector
  */
-void compute_N_gram(int input[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t chAM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]){
+void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1], uint32_t channel_AM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]) {
 
     int ix;
     uint32_t tmp = 0;
@@ -84,7 +62,7 @@ void compute_N_gram(int input[CHANNELS], uint32_t iM[][BIT_DIM + 1], uint32_t ch
         query[i] = 0;
         for (j = 0; j < CHANNELS; j++) {
             ix = input[j];
-            tmp = iM[ix][i] ^ chAM[j][i];
+            tmp = channel_iM[ix][i] ^ channel_AM[j][i];
             chHV[j][i] = tmp;
         }
 
