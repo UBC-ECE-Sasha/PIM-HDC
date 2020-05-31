@@ -82,11 +82,7 @@ static int dpu_hdc() {
         }
 
         // Classifies the new N-gram through the Associative Memory matrix.
-        if (N == 1) {
-            class = associative_memory_32bit(q, aM_32);
-        } else {
-            class = associative_memory_32bit(q, aM_32);
-        }
+        class = associative_memory_32bit(q, aM_32);
 
         printf("%d\n", class);
 
