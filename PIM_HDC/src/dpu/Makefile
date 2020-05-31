@@ -9,7 +9,7 @@ endif
 SOURCES = dpu_task.c $(wildcard ../hdc/*.c)
 HDC_DPU = hdc.dpu
 
-INC=-I../../include
+INC=-I../../include  -I../../PIM-common/common/include
 
 .PHONY: default all clean
 

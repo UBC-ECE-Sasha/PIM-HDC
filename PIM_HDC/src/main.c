@@ -12,6 +12,7 @@
 #include "init.h"
 #include "data.h"
 #include "host_only.h"
+#include "common.h"
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 

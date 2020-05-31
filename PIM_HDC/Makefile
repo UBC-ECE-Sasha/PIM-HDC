@@ -16,7 +16,7 @@ all: default
 SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c)
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
-INC=-Iinclude
+INC=-Iinclude -IPIM-common/common/include
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)

@@ -1,0 +1,3 @@
+[submodule "PIM_HDC/PIM-common"]
+	path = PIM_HDC/PIM-common
+	url = https://github.com/UBC-ECE-Sasha/PIM-common.git
