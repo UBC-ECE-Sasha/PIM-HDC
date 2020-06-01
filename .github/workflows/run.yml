@@ -17,7 +17,7 @@ jobs:
         with:
             submodules: true
       - name: Build
-        run: cd PIM_HDC && make
+        run: cd PIM_HDC && DEBUG=1 make
       - name: Run on host
         run: cd PIM_HDC && ./pim_hdc
       - name: Run on DPU
