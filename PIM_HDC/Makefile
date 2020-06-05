@@ -8,6 +8,9 @@ ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
 
+# Default
+NR_DPUS = 32
+
 .PHONY: default all clean
 
 default: $(TARGET) dpu
@@ -19,7 +22,7 @@ HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -IPIM-common/common/include
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) $(INC) -c $< -o $@ $(DPU_OPTS)
+	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) $(INC) -c $< -o $@ $(DPU_OPTS)
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 
@@ -27,8 +30,9 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) $(INC) -o $@ $(DPU_OPTS)
 
 dpu:
-	DEBUG=$(DEBUG) NR_TASKLETS=$(NR_TASKLETS) $(MAKE) -C src/dpu
+	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) $(MAKE) -C src/dpu
 
 clean:
 	find . -type f -name '*.o' -delete
 	-rm -f $(TARGET)
+	$(MAKE) -C src/dpu clean
