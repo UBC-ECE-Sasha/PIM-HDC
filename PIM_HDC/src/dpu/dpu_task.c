@@ -12,7 +12,7 @@
 #include "init.h"
 #include "data.h"
 
-__host __mram_ptr int32_t * input_buffer;
+__host __mram_ptr int8_t * input_buffer;
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_offset;
 
@@ -31,7 +31,7 @@ static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX], uint32_t n
     }
 
     for (int i = 0; i < CHANNELS; i++) {
-        mram_read(&input_buffer[i * buffer_channel_offset], read_buf[i], read_size);
+        mram_read(&input_buffer[i * buffer_channel_offset], read_buf[i], buffer_channel_offset);
         for (int j = 0; j < num_samples; j++) {
             dbg_printf("read_buf[%d][%d]=%d\n", i, j, read_buf[i][j]);
         }
