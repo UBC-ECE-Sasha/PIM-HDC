@@ -16,7 +16,7 @@
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
-// TODO: When ready, set to NUMBER_OF_INPUT_SAMPLES (Must be >= NUMBER_OF_INPUT_SAMPLES)
+/* Must be <= NUMBER_OF_INPUT_SAMPLES */
 #define TEST_SAMPLE_SIZE NUMBER_OF_INPUT_SAMPLES
 
 /**
@@ -34,10 +34,13 @@ static int prepare_dpu(in_buffer data_set) {
 
     uint32_t input_buffer_start = MEGABYTE(1);
 
-    /* Section of buffer for one channel */
+    /* Section of buffer for one channel, without samples not divisible b N */
     uint32_t samples = TEST_SAMPLE_SIZE / NR_DPUS;
-    uint32_t remainder = TEST_SAMPLE_SIZE % NR_DPUS;
-    
+    /* Remove samples not divisible b N */
+    samples -= samples % N;
+    /* Extra data for last DPU */
+    uint32_t extra_data = TEST_SAMPLE_SIZE - (samples * NR_DPUS);
+
     dbg_printf("samples = %d / %d = %d\n", TEST_SAMPLE_SIZE, NR_DPUS, samples);
     if (samples > SAMPLE_SIZE_MAX) {
         fprintf(stderr, "samples per dpu (%d) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
@@ -45,8 +48,14 @@ static int prepare_dpu(in_buffer data_set) {
     }
 
     uint32_t buffer_channel_length = samples;
-    uint32_t aligned_buffer_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
+    /* + N to account for + z in algorithm (unless 1 DPU) */
+    uint32_t buffer_channel_usable_length = buffer_channel_length;
+    if (NR_DPUS > 1) {
+        buffer_channel_usable_length += N;
+    }
+
+    uint32_t aligned_buffer_size = ALIGN(buffer_channel_usable_length * sizeof(int32_t), 8);
     uint32_t buff_offset = 0;
 
     // Allocate DPUs
@@ -54,9 +63,11 @@ static int prepare_dpu(in_buffer data_set) {
 
     DPU_FOREACH(dpus, dpu) {
         dbg_printf("DPU %d\n", dpu_id);
+        dbg_printf("buff_offset = %d\n", buff_offset);
         /* Modified only for last DPU in case uneven */
-        if ((dpu_id == (NR_DPUS - 1)) && (NR_DPUS > 1) && (remainder != 0)) {
-            buffer_channel_length = buffer_channel_length + remainder;
+        if ((dpu_id == (NR_DPUS - 1)) && (NR_DPUS > 1) && (extra_data != 0)) {
+            buffer_channel_length = buffer_channel_length + extra_data;
+            buffer_channel_usable_length = buffer_channel_length; /* No N on last in algorithm */
             aligned_buffer_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
         }
 
@@ -64,13 +75,14 @@ static int prepare_dpu(in_buffer data_set) {
         DPU_ASSERT(dpu_copy_to(dpu, "input_buffer", 0, &input_buffer_start, sizeof(input_buffer_start)));
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_length", 0, &buffer_channel_length, sizeof(buffer_channel_length)));
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_offset", 0, &aligned_buffer_size, sizeof(aligned_buffer_size)));
+        DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_usable_length", 0, &buffer_channel_usable_length, sizeof(buffer_channel_usable_length)));
 
         if (buffer_channel_length > 0) {
             /* Copy each channel into DPU array */
             for (uint32_t i = 0; i < CHANNELS; i++) {
                 uint8_t * ta = (uint8_t *)(&data_set.buffer[(i * NUMBER_OF_INPUT_SAMPLES) + buff_offset]);
                 /* Check output dataset */
-                dbg_printf("OUTPUT data_set[%d] (%d samples):\n", i, buffer_channel_length);
+                dbg_printf("OUTPUT data_set[%d] (%d samples, %d usable):\n", i, buffer_channel_length, buffer_channel_usable_length);
                 for (uint32_t j = 0; j < buffer_channel_length; j++) dbg_printf("td[%d]=%d\n", j, ((int32_t *)ta)[j]);
                 DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, input_buffer_start + i*aligned_buffer_size, ta, aligned_buffer_size, 0));
             }
@@ -78,8 +90,6 @@ static int prepare_dpu(in_buffer data_set) {
         buff_offset += buffer_channel_length;
         dpu_id++;
     }
-
-    assert(buff_offset == TEST_SAMPLE_SIZE);
 
     int ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
 
@@ -121,6 +131,7 @@ static int host_hdc(int32_t * data_set) {
                 // NOTE: Buffer overflow in original code?
                 if (ix + z < TEST_SAMPLE_SIZE) {
                     quantized_buffer[j] = data_set[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z];
+                    dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
                 }
             }
 

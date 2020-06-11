@@ -15,6 +15,7 @@
 __host __mram_ptr int8_t * input_buffer;
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_offset;
+__host uint32_t buffer_channel_usable_length;
 
 /**
  * @brief Fill @p read_buf with data from @p input_buffer.
@@ -24,7 +25,6 @@ __host uint32_t buffer_channel_offset;
  * @return                 @p ENOMEM on failure. Zero on success.
  */
 static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX], uint32_t num_samples) {
-    uint32_t read_size = num_samples * sizeof(int32_t);
     if (num_samples > SAMPLE_SIZE_MAX) {
         printf("Cannot use buffer of sample size over %d, use smaller dataset\n", SAMPLE_SIZE_MAX);
         return ENOMEM;
@@ -32,9 +32,6 @@ static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX], uint32_t n
 
     for (int i = 0; i < CHANNELS; i++) {
         mram_read(&input_buffer[i * buffer_channel_offset], read_buf[i], buffer_channel_offset);
-        for (int j = 0; j < num_samples; j++) {
-            dbg_printf("read_buf[%d][%d]=%d\n", i, j, read_buf[i][j]);
-        }
     }
 
     return 0;
@@ -59,26 +56,22 @@ static int dpu_hdc() {
 
     int ret = 0;
 
-    /* TODO: Allocs are NULL */
-
-    uint32_t num_samples = buffer_channel_length;
-
     __dma_aligned int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX];
 
-    ret = alloc_buffers(read_buf, num_samples);
+    ret = alloc_buffers(read_buf, buffer_channel_usable_length);
     if (ret != 0) {
         return ret;
     }
 
-    for(int ix = 0; ix < num_samples; ix = ix + N) {
+    for(int ix = 0; ix < buffer_channel_length; ix = ix + N) {
 
         for(int z = 0; z < N; z++) {
 
             for(int j = 0; j < CHANNELS; j++) {
                 // NOTE: Buffer overflow in original code?
-                if (ix + z < num_samples) {
+                if (ix + z < buffer_channel_usable_length) {
                     quantized_buffer[j] = read_buf[j][ix + z];
-                    // dbg_printf("quantized_buffer[%d]=%d\n", j, quantized_buffer[j]);
+                    dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
                 }
             }
 
@@ -94,7 +87,6 @@ static int dpu_hdc() {
                 overflow = q[0] & mask;
 
                 for(int i = 1; i < BIT_DIM; i++) {
-
                     old_overflow = overflow;
                     overflow = q[i] & mask;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
