@@ -25,6 +25,8 @@ jobs:
       - name: Build
         run: cd PIM_HDC && make clean && make
       - name: Run on host
-        run: cd PIM_HDC && ./pim_hdc
+        run: cd PIM_HDC && ./pim_hdc | tee host.results.log
       - name: Run on DPU
-        run: cd PIM_HDC && ./pim_hdc -d
+        run: cd PIM_HDC && ./pim_hdc -d | tee dpu.results.log
+      - name: Compare results
+        run: cd PIM_HDC && [ -z "$(diff host.results.log dpu.results.log)" ] || exit 1
