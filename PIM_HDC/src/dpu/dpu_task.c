@@ -5,17 +5,23 @@
 #include <stdio.h>
 #include <errno.h>
 #include "alloc.h"
-#include "common.h"
 
+#include "common.h"
 #include "associative_memory.h"
 #include "aux_functions.h"
 #include "init.h"
 #include "data.h"
+#include "cycle_counter.h"
 
 __host __mram_ptr int8_t * input_buffer;
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_offset;
 __host uint32_t buffer_channel_usable_length;
+
+perfcounter_t total_cycles = 0;
+perfcounter_t alloc_buffers_cycles = 0;
+perfcounter_t compute_N_gram_cycles = 0;
+perfcounter_t bit_mod_cycles = 0;
 
 /**
  * @brief Fill @p read_buf with data from @p input_buffer.
@@ -57,17 +63,18 @@ static int dpu_hdc() {
 
     __dma_aligned int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX];
 
+    CYCLES_COUNT_START(&total_cycles);
     ret = alloc_buffers(read_buf);
     if (ret != 0) {
         return ret;
     }
+    CYCLES_COUNT_FINISH(&total_cycles, &alloc_buffers_cycles);
 
     for(int ix = 0; ix < buffer_channel_length; ix += N) {
 
         for(int z = 0; z < N; z++) {
 
             for(int j = 0; j < CHANNELS; j++) {
-                // NOTE: Buffer overflow in original code?
                 if (ix + z < buffer_channel_usable_length) {
                     quantized_buffer[j] = read_buf[j][ix + z];
                     dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
@@ -77,10 +84,15 @@ static int dpu_hdc() {
             // Spatial and Temporal Encoder: computes the N-gram.
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
+                CYCLES_COUNT_START(&total_cycles);
                 compute_N_gram(quantized_buffer, iM, chAM, q);
+                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
             } else {
+                CYCLES_COUNT_START(&total_cycles);
                 compute_N_gram(quantized_buffer, iM, chAM, q_N);
+                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
 
+                CYCLES_COUNT_START(&total_cycles);
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
                 overflow = q[0] & mask;
@@ -99,6 +111,7 @@ static int dpu_hdc() {
 
                 q[0] = (q[0] >> 1) | (overflow << (32 - 1));
                 q[0] = q_N[0] ^ q[0];
+                CYCLES_COUNT_FINISH(&total_cycles, &bit_mod_cycles);
             }
         }
 
@@ -114,11 +127,12 @@ static int dpu_hdc() {
 
 int main() {
     uint8_t idx = me();
-    (void)idx;
+    (void) idx;
 
     dbg_printf("DPU starting, tasklet %d\n", idx);
 
-    perfcounter_config(COUNT_CYCLES, true);
+    /* Initialize cycle counters */
+    perfcounter_config(COUNTER_CONFIG, true);
 
     int ret = 0;
 
@@ -128,7 +142,11 @@ int main() {
         printf("No work to do\n");
     }
 
-    dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, perfcounter_get());
+    total_cycles += perfcounter_get();
+    dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
+    dbg_printf("alloc_buffers used %ld cycles (%f%%)\n", alloc_buffers_cycles, (double)alloc_buffers_cycles / (double)total_cycles);
+    dbg_printf("compute_N_gram used %ld cycles (%f%%)\n", compute_N_gram_cycles, (double)compute_N_gram_cycles / (double)total_cycles);
+    dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles, (double)bit_mod_cycles / (double)total_cycles);
 
     return ret;
 }
