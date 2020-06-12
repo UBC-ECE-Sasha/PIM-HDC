@@ -144,9 +144,12 @@ int main() {
 
     total_cycles += perfcounter_get();
     dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
-    dbg_printf("alloc_buffers used %ld cycles (%f%%)\n", alloc_buffers_cycles, (double)alloc_buffers_cycles / (double)total_cycles);
-    dbg_printf("compute_N_gram used %ld cycles (%f%%)\n", compute_N_gram_cycles, (double)compute_N_gram_cycles / (double)total_cycles);
-    dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles, (double)bit_mod_cycles / (double)total_cycles);
+    dbg_printf("alloc_buffers used %ld cycles (%f%%)\n", alloc_buffers_cycles,
+               (double)alloc_buffers_cycles / total_cycles);
+    dbg_printf("compute_N_gram used %ld cycles (%f%%)\n", compute_N_gram_cycles,
+               (double)compute_N_gram_cycles / total_cycles);
+    dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
+               (double)bit_mod_cycles / total_cycles);
 
     return ret;
 }
