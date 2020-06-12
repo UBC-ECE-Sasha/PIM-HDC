@@ -9,7 +9,7 @@ ifeq ($(DEBUG), 1)
 endif
 
 # Default
-NR_DPUS = 32
+NR_DPUS ?= 32
 
 .PHONY: default all clean
 
