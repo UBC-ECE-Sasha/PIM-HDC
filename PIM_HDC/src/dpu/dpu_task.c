@@ -24,8 +24,8 @@ __host uint32_t buffer_channel_usable_length;
  * @param[in] num_samples  Number of samples to read from MRAM.
  * @return                 @p ENOMEM on failure. Zero on success.
  */
-static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX], uint32_t num_samples) {
-    if (num_samples > SAMPLE_SIZE_MAX) {
+static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX]) {
+    if (buffer_channel_usable_length > SAMPLE_SIZE_MAX) {
         printf("Cannot use buffer of sample size over %d, use smaller dataset\n", SAMPLE_SIZE_MAX);
         return ENOMEM;
     }
@@ -58,12 +58,12 @@ static int dpu_hdc() {
 
     __dma_aligned int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX];
 
-    ret = alloc_buffers(read_buf, buffer_channel_usable_length);
+    ret = alloc_buffers(read_buf);
     if (ret != 0) {
         return ret;
     }
 
-    for(int ix = 0; ix < buffer_channel_length; ix = ix + N) {
+    for(int ix = 0; ix < buffer_channel_length; ix += N) {
 
         for(int z = 0; z < N; z++) {
 
@@ -91,7 +91,6 @@ static int dpu_hdc() {
                     overflow = q[i] & mask;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
                     q[i] = q_N[i] ^ q[i];
-
                 }
 
                 old_overflow = overflow;

@@ -34,16 +34,16 @@ static int prepare_dpu(in_buffer data_set) {
 
     uint32_t input_buffer_start = MEGABYTE(1);
 
-    /* Section of buffer for one channel, without samples not divisible b N */
+    /* Section of buffer for one channel, without samples not divisible by N */
     uint32_t samples = TEST_SAMPLE_SIZE / NR_DPUS;
-    /* Remove samples not divisible b N */
+    /* Remove samples not divisible by N */
     samples -= samples % N;
     /* Extra data for last DPU */
     uint32_t extra_data = TEST_SAMPLE_SIZE - (samples * NR_DPUS);
 
     dbg_printf("samples = %d / %d = %d\n", TEST_SAMPLE_SIZE, NR_DPUS, samples);
     if (samples > SAMPLE_SIZE_MAX) {
-        fprintf(stderr, "samples per dpu (%d) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
+        fprintf(stderr, "samples per dpu (%u) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
                 samples, SAMPLE_SIZE_MAX);
     }
 
@@ -82,7 +82,7 @@ static int prepare_dpu(in_buffer data_set) {
             for (uint32_t i = 0; i < CHANNELS; i++) {
                 uint8_t * ta = (uint8_t *)(&data_set.buffer[(i * NUMBER_OF_INPUT_SAMPLES) + buff_offset]);
                 /* Check output dataset */
-                dbg_printf("OUTPUT data_set[%d] (%d samples, %d usable):\n", i, buffer_channel_length, buffer_channel_usable_length);
+                dbg_printf("OUTPUT data_set[%d] (%u samples, %u usable):\n", i, buffer_channel_length, buffer_channel_usable_length);
                 for (uint32_t j = 0; j < buffer_channel_length; j++) dbg_printf("td[%d]=%d\n", j, ((int32_t *)ta)[j]);
                 DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, input_buffer_start + i*aligned_buffer_size, ta, aligned_buffer_size, 0));
             }
@@ -123,7 +123,7 @@ static int host_hdc(int32_t * data_set) {
 
     int32_t quantized_buffer[CHANNELS];
 
-    for(int ix = 0; ix < TEST_SAMPLE_SIZE; ix = ix + N) {
+    for(int ix = 0; ix < TEST_SAMPLE_SIZE; ix += N) {
 
         for(int z = 0; z < N; z++) {
 
