@@ -6,6 +6,8 @@ ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
 
+CFLAGS += -DNR_DPUS=$(NR_DPUS)
+
 SOURCES = dpu_task.c $(wildcard ../hdc/*.c)
 HDC_DPU = hdc.dpu
 

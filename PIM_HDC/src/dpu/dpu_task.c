@@ -3,19 +3,43 @@
 #include <defs.h>
 #include <perfcounter.h>
 #include <stdio.h>
+#include <errno.h>
 #include "alloc.h"
+#include "common.h"
 
 #include "associative_memory.h"
 #include "aux_functions.h"
 #include "init.h"
 #include "data.h"
 
-#define READ_INTS_BUFFER_SIZE 2
-
-__host __mram_ptr uint8_t * input_buffer;
+__host __mram_ptr int8_t * input_buffer;
+__host uint32_t buffer_channel_length;
+__host uint32_t buffer_channel_offset;
+__host uint32_t buffer_channel_usable_length;
 
 /**
- * Run HDC algorithm on host
+ * @brief Fill @p read_buf with data from @p input_buffer.
+ *
+ * @param[out] read_buf    Buffers filled with sample data.
+ * @return                 @p ENOMEM on failure. Zero on success.
+ */
+static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX]) {
+    if (buffer_channel_usable_length > SAMPLE_SIZE_MAX) {
+        printf("Cannot use buffer of sample size over %d, use smaller dataset\n", SAMPLE_SIZE_MAX);
+        return ENOMEM;
+    }
+
+    for (int i = 0; i < CHANNELS; i++) {
+        mram_read(&input_buffer[i * buffer_channel_offset], read_buf[i], buffer_channel_offset);
+    }
+
+    return 0;
+}
+
+/**
+ * @breif Run HDC algorithm on host
+ *
+ * @return Non-zero on failure.
  */
 static int dpu_hdc() {
     /* Buffer for each channel */
@@ -29,25 +53,24 @@ static int dpu_hdc() {
     uint32_t q_N[BIT_DIM + 1] = {0};
     int class;
 
-    __dma_aligned int32_t read_buf[READ_INTS_BUFFER_SIZE];
+    int ret = 0;
 
-    for(int ix = 0; ix < NUMBER_OF_INPUT_SAMPLES; ix = ix + N) {
+    __dma_aligned int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX];
+
+    ret = alloc_buffers(read_buf);
+    if (ret != 0) {
+        return ret;
+    }
+
+    for(int ix = 0; ix < buffer_channel_length; ix += N) {
 
         for(int z = 0; z < N; z++) {
 
             for(int j = 0; j < CHANNELS; j++) {
                 // NOTE: Buffer overflow in original code?
-                if (ix + z < NUMBER_OF_INPUT_SAMPLES) {
-                    // Read from input_buffer into quantized_buffer
-
-                    // Case where reading 2 int32s would read past buffer
-                    if (ix + z == (NUMBER_OF_INPUT_SAMPLES - 1)) {
-                        mram_read(&input_buffer[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z - 1], read_buf, READ_INTS_BUFFER_SIZE * sizeof(int32_t));
-                        quantized_buffer[j] = read_buf[1];
-                    } else {
-                        mram_read(&input_buffer[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z], read_buf, READ_INTS_BUFFER_SIZE * sizeof(int32_t));
-                        quantized_buffer[j] = read_buf[0];
-                    }
+                if (ix + z < buffer_channel_usable_length) {
+                    quantized_buffer[j] = read_buf[j][ix + z];
+                    dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
                 }
             }
 
@@ -63,12 +86,10 @@ static int dpu_hdc() {
                 overflow = q[0] & mask;
 
                 for(int i = 1; i < BIT_DIM; i++) {
-
                     old_overflow = overflow;
                     overflow = q[i] & mask;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
                     q[i] = q_N[i] ^ q[i];
-
                 }
 
                 old_overflow = overflow;
@@ -88,19 +109,26 @@ static int dpu_hdc() {
 
     }
 
-    return 0;
+    return ret;
 }
 
 int main() {
     uint8_t idx = me();
+    (void)idx;
 
-    printf("DPU starting, tasklet %d\n", idx);
+    dbg_printf("DPU starting, tasklet %d\n", idx);
 
     perfcounter_config(COUNT_CYCLES, true);
 
-    dpu_hdc();
+    int ret = 0;
 
-    printf("Tasklet %d: completed in %ld cycles\n", idx, perfcounter_get());
+    if (buffer_channel_length > 0) {
+        ret = dpu_hdc();
+    } else {
+        printf("No work to do\n");
+    }
 
-    return 0;
+    dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, perfcounter_get());
+
+    return ret;
 }

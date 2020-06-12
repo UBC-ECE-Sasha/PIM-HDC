@@ -25,4 +25,8 @@ typedef struct in_buffer {
     uint32_t buffer_size;
 } in_buffer;
 
+// Sample size max per DPU in each channel in 32 bit integers (make sure aligned bytes)
+#define SAMPLE_SIZE_MAX 512
+
+
 #endif
