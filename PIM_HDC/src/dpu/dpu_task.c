@@ -13,6 +13,8 @@
 #include "data.h"
 #include "cycle_counter.h"
 
+#define MASK 1
+
 __host __mram_ptr int8_t * input_buffer;
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_offset;
@@ -54,7 +56,6 @@ static int dpu_hdc() {
 
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
-    uint32_t mask = 1;
     uint32_t q[BIT_DIM + 1] = {0};
     uint32_t q_N[BIT_DIM + 1] = {0};
     int class;
@@ -95,17 +96,17 @@ static int dpu_hdc() {
                 CYCLES_COUNT_START(&total_cycles);
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
-                overflow = q[0] & mask;
+                overflow = q[0] & MASK;
 
                 for(int i = 1; i < BIT_DIM; i++) {
                     old_overflow = overflow;
-                    overflow = q[i] & mask;
+                    overflow = q[i] & MASK;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
                     q[i] = q_N[i] ^ q[i];
                 }
 
                 old_overflow = overflow;
-                overflow = (q[BIT_DIM] >> 16) & mask;
+                overflow = (q[BIT_DIM] >> 16) & MASK;
                 q[BIT_DIM] = (q[BIT_DIM] >> 1) | (old_overflow << (32 - 1));
                 q[BIT_DIM] = q_N[BIT_DIM] ^ q[BIT_DIM];
 
