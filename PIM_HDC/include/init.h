@@ -11,14 +11,18 @@
 #define CHANNELS 4
 //dimension of the hypervectors after compression (dimension/32 rounded to the smallest integer)
 #define BIT_DIM 312
+
 //number of input samples
+#ifdef TEST
 #define NUMBER_OF_INPUT_SAMPLES 14883
+#else
+#define NUMBER_OF_INPUT_SAMPLES 1489
+#endif
+
 //dimension of the N-grams (models for N = 1 and N = 5 are contained in data.h)
 #define N 5
 //CHANNELS_VOTING for the componentwise majority must be odd
 #define CHANNELS_VOTING CHANNELS + 1
-
-#define TEST 1
 
 typedef struct in_buffer {
     int32_t * buffer;

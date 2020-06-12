@@ -5,6 +5,10 @@ CFLAGS       = --std=c11 -O2 -flto -g -Wall
 ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
+# define TEST in the source if we are debugging
+ifeq ($(TEST), 1)
+	CFLAGS+=-TEST
+endif
 
 CFLAGS += -DNR_DPUS=$(NR_DPUS)
 

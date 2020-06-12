@@ -7,6 +7,10 @@ TARGET = pim_hdc
 ifeq ($(DEBUG), 1)
 	CFLAGS+=-DDEBUG
 endif
+# define TEST in the source if we are debugging
+ifeq ($(TEST), 1)
+	CFLAGS+=-TEST
+endif
 
 # Default
 NR_DPUS ?= 32
@@ -30,7 +34,7 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) $(INC) -o $@ $(DPU_OPTS)
 
 dpu:
-	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) $(MAKE) -C src/dpu
+	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) TEST=$(TEST) $(MAKE) -C src/dpu
 
 clean:
 	find . -type f -name '*.o' -delete
