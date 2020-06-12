@@ -21,7 +21,6 @@ __host uint32_t buffer_channel_usable_length;
  * @brief Fill @p read_buf with data from @p input_buffer.
  *
  * @param[out] read_buf    Buffers filled with sample data.
- * @param[in] num_samples  Number of samples to read from MRAM.
  * @return                 @p ENOMEM on failure. Zero on success.
  */
 static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX]) {
