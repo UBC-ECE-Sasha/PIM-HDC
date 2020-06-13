@@ -9,8 +9,8 @@
 #define CLASSES 5
 //number of acquisition's CHANNELS
 #define CHANNELS 4
-//dimension of the hypervectors after compression (dimension/32 rounded to the smallest integer)
-#define BIT_DIM 312
+// Dimension of the hypervectors after compression (dimension/32 rounded to the smallest integer)
+#define BIT_DIM (DIMENSION >> 5)
 
 //number of input samples
 #ifdef TEST
