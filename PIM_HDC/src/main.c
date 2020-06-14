@@ -132,7 +132,6 @@ static int host_hdc(int32_t * data_set) {
                 // NOTE: Buffer overflow in original code?
                 if (ix + z < TEST_SAMPLE_SIZE) {
                     quantized_buffer[j] = data_set[(j * NUMBER_OF_INPUT_SAMPLES) + ix + z];
-                    dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
                 }
             }
 
