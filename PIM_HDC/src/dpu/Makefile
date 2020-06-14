@@ -7,7 +7,7 @@ ifeq ($(DEBUG), 1)
 endif
 # define TEST in the source if we are debugging
 ifeq ($(TEST), 1)
-	CFLAGS+=-TEST
+	CFLAGS+=-DTEST
 endif
 
 CFLAGS += -DNR_DPUS=$(NR_DPUS)
