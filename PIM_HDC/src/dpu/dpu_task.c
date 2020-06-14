@@ -78,7 +78,6 @@ static int dpu_hdc() {
             for(int j = 0; j < CHANNELS; j++) {
                 if (ix + z < buffer_channel_usable_length) {
                     quantized_buffer[j] = read_buf[j][ix + z];
-                    dbg_printf("quantized_buffer[%d] = data_set[%d][%d + %d] = %d\n", j, j, ix, z, quantized_buffer[j]);
                 }
             }
 

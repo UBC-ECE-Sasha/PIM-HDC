@@ -77,7 +77,8 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
         for (int z = 31; z >= 0; z--) {
 
             for (int j = 0 ; j < CHANNELS + 1; j++) {
-                majority = majority | (((chHV[j][i] & ( 1 << z)) >> z) << j);
+                // Equivalent, but more expensive on DPU
+                majority = majority | (((chHV[j][i] >> z) & 1) << j);
             }
 
             if (number_of_set_bits(majority) > 2) {

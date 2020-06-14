@@ -83,7 +83,6 @@ static int prepare_dpu(in_buffer data_set) {
                 uint8_t * ta = (uint8_t *)(&data_set.buffer[(i * NUMBER_OF_INPUT_SAMPLES) + buff_offset]);
                 /* Check output dataset */
                 dbg_printf("OUTPUT data_set[%d] (%u samples, %u usable):\n", i, buffer_channel_length, buffer_channel_usable_length);
-                for (uint32_t j = 0; j < buffer_channel_length; j++) dbg_printf("td[%d]=%d\n", j, ((int32_t *)ta)[j]);
                 DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, input_buffer_start + i*aligned_buffer_size, ta, aligned_buffer_size, 0));
             }
         }
