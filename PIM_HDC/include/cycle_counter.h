@@ -17,8 +17,8 @@
 #define CYCLES_COUNT_FINISH(tc, sc)
 #endif
 
-void cycles_count_start(perfcounter_t *total_counter);
+perfcounter_t cycles_count_start(perfcounter_t *total_counter);
 
-perfcounter_t cycles_count_finish(perfcounter_t *total_counter, perfcounter_t *section_counter);
+perfcounter_t cycles_count_finish(perfcounter_t counter, perfcounter_t *section_counter);
 
 #endif // CYCLE_COUNTER_H_

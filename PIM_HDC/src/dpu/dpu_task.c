@@ -21,7 +21,7 @@ __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_offset;
 __host uint32_t buffer_channel_usable_length;
 
-perfcounter_t total_cycles = 0;
+perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
 perfcounter_t associative_memory_cycles = 0;
 perfcounter_t bit_mod_cycles = 0;
@@ -51,8 +51,6 @@ static int alloc_buffers(int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX]) {
  * @return Non-zero on failure.
  */
 static int dpu_hdc() {
-    /* Buffer for each channel */
-
     int32_t quantized_buffer[CHANNELS];
 
     uint32_t overflow = 0;
@@ -83,16 +81,15 @@ static int dpu_hdc() {
             // Spatial and Temporal Encoder: computes the N-gram.
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                CYCLES_COUNT_START(&total_cycles);
+                CYCLES_COUNT_START(&counter);
                 compute_N_gram(quantized_buffer, iM, chAM, q);
-                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
+                CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
             } else {
-                CYCLES_COUNT_START(&total_cycles);
+                CYCLES_COUNT_START(&counter);
                 compute_N_gram(quantized_buffer, iM, chAM, q_N);
-                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
+                CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
 
-
-                CYCLES_COUNT_START(&total_cycles);
+                CYCLES_COUNT_START(&counter);
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
                 int32_t shifted_q;
@@ -111,13 +108,13 @@ static int dpu_hdc() {
 
                 shifted_q = (q[0] >> 1) | (overflow << (32 - 1));
                 q[0] = q_N[0] ^ shifted_q;
-                CYCLES_COUNT_FINISH(&total_cycles, &bit_mod_cycles);
+                CYCLES_COUNT_FINISH(counter, &bit_mod_cycles);
             }
         }
-        CYCLES_COUNT_START(&total_cycles);
+        CYCLES_COUNT_START(&counter);
         // Classifies the new N-gram through the Associative Memory matrix.
         class = associative_memory_32bit(q, aM_32);
-        CYCLES_COUNT_FINISH(&total_cycles, &associative_memory_cycles);
+        CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
         printf("%d\n", class);
 
     }
@@ -142,7 +139,7 @@ int main() {
         printf("No work to do\n");
     }
 
-    total_cycles += perfcounter_get();
+    perfcounter_t total_cycles = perfcounter_get();
     dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
     dbg_printf("compute_N_gram_cycles used %ld cycles (%f%%)\n", compute_N_gram_cycles,
                (double)compute_N_gram_cycles / total_cycles);

@@ -3,7 +3,6 @@
 
 #include <perfcounter.h>
 
-extern perfcounter_t total_cycles;
 extern perfcounter_t compute_N_gram_cycles;
 extern perfcounter_t associative_memory_cycles;
 extern perfcounter_t bit_mod_cycles;

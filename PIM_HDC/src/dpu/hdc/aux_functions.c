@@ -1,7 +1,6 @@
 #include "aux_functions.h"
 #include "global_dpu.h"
 #include "cycle_counter.h"
-#include "assert.h"
 #include "built_ins.h"
 
 #define BUILTIN_CAO
