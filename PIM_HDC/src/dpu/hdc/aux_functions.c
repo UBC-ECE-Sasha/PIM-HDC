@@ -33,20 +33,10 @@ int max_dist_hamm(int distances[CLASSES]) {
  * @param[out] sims Distances' vector
  */
 void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[CLASSES]){
-    
     for (int i = 0; i < CLASSES; i++) {
         sims[i] = 0;
         for (int j = 0; j < BIT_DIM + 1; j++) {
-            uint32_t tmp = q[j] ^ aM[i][j];
-
-#ifdef BUILTIN_CAO
-            int set_bits;
-            // Retrieve number of set bits (count all ones)
-            __builtin_cao_rr(set_bits, tmp);
-            sims[i] += set_bits;
-#else
-            sims[i] += number_of_set_bits(tmp);
-#endif
+            sims[i] += number_of_set_bits(q[j] ^ aM[i][j]);
         }
     }
 }
@@ -80,14 +70,8 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
             for (int j = 0 ; j < CHANNELS + 1; j++) {
                 majority = majority | (((chHV[j][i] >> z) & 1) << j);
             }
-            int set_bits;
-#ifdef BUILTIN_CAO
-            // Retrieve number of set bits (count all ones)
-            __builtin_cao_rr(set_bits, majority);
-#else
-            set_bits = number_of_set_bits(majority);
-#endif
-            if (set_bits > 2) {
+
+            if (number_of_set_bits(majority) > 2) {
                 query[i] = query[i] | ( 1 << z );
             }
         }
@@ -102,8 +86,15 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
  * @param i The i-th variable that composes the hypervector
  * @return  Number of 1's in i-th variable of hypervector
  */
-int number_of_set_bits(uint32_t i) {
+inline int number_of_set_bits(uint32_t i) {
+    int set_bits;
+#ifdef BUILTIN_CAO
+    // Retrieve number of set bits (count all ones)
+    __builtin_cao_rr(set_bits, i);
+#else
      i = i - ((i >> 1) & 0x55555555);
      i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
-     return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+     set_bits = (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+#endif
+    return set_bits;
 }
