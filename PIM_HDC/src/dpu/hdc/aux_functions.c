@@ -66,18 +66,14 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
  * @param[out] query      Query hypervector
  */
 void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1], uint32_t channel_AM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]) {
-    int ix;
-    uint32_t tmp = 0;
-    int i, j;
     uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
 
-    for (i = 0; i < BIT_DIM + 1; i++) {
+    for (int i = 0; i < BIT_DIM + 1; i++) {
         query[i] = 0;
 
-        for (j = 0; j < CHANNELS; j++) {
-            ix = input[j];
-            tmp = channel_iM[ix][i] ^ channel_AM[j][i];
-            chHV[j][i] = tmp;
+        for (int j = 0; j < CHANNELS; j++) {
+            int ix = input[j];
+            chHV[j][i] = channel_iM[ix][i] ^ channel_AM[j][i];
         }
 
         // this is done to make the dimension of the matrix for the componentwise majority odd.
