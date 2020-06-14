@@ -34,27 +34,22 @@ int max_dist_hamm(int distances[CLASSES]) {
  * @param[out] sims Distances' vector
  */
 void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[CLASSES]){
-    int r_tmp = 0;
-
-    uint32_t tmp = 0;
+    
     for (int i = 0; i < CLASSES; i++) {
+        sims[i] = 0;
         for (int j = 0; j < BIT_DIM + 1; j++) {
-            tmp = q[j] ^ aM[i][j];
+            uint32_t tmp = q[j] ^ aM[i][j];
 
 #ifdef BUILTIN_CAO
             int set_bits;
             // Retrieve number of set bits (count all ones)
             __builtin_cao_rr(set_bits, tmp);
-            r_tmp += set_bits;
+            sims[i] += set_bits;
 #else
-            r_tmp += number_of_set_bits(tmp);
+            sims[i] += number_of_set_bits(tmp);
 #endif
         }
-
-        sims[i] = r_tmp;
-        r_tmp = 0;
     }
-
 }
 
 /**
@@ -81,10 +76,8 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
 
         // componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
         // and then compute the number of 1's with the function numberOfSetBits(uint32_t).
-
-        uint32_t majority = 0;
         for (int z = 31; z >= 0; z--) {
-
+            uint32_t majority = 0;
             for (int j = 0 ; j < CHANNELS + 1; j++) {
                 majority = majority | (((chHV[j][i] >> z) & 1) << j);
             }
@@ -98,7 +91,6 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
             if (set_bits > 2) {
                 query[i] = query[i] | ( 1 << z );
             }
-            majority = 0;
         }
 
     }
