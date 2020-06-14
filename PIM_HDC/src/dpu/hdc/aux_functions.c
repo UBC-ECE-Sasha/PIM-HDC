@@ -73,13 +73,13 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
 
     for (i = 0; i < BIT_DIM + 1; i++) {
         query[i] = 0;
-        // CYCLES_COUNT_START(&total_cycles);
+
         for (j = 0; j < CHANNELS; j++) {
             ix = input[j];
             tmp = channel_iM[ix][i] ^ channel_AM[j][i];
             chHV[j][i] = tmp;
         }
-        // CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_top_cycles);
+
         // this is done to make the dimension of the matrix for the componentwise majority odd.
         chHV[CHANNELS][i] = chHV[0][i] ^ chHV[1][i];
 
