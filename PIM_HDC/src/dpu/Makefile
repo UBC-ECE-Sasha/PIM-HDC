@@ -12,7 +12,7 @@ endif
 
 CFLAGS += -DNR_DPUS=$(NR_DPUS)
 
-SOURCES = $(wildcard *.c) $(wildcard ../hdc/*.c)
+SOURCES = $(wildcard *.c) $(wildcard hdc/*.c)
 HDC_DPU = hdc.dpu
 
 INC=-I../../include  -I../../PIM-common/common/include

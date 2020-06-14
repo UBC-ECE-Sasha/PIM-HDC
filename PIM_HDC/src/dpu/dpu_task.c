@@ -4,7 +4,8 @@
 #include <perfcounter.h>
 #include <stdio.h>
 #include <errno.h>
-#include "alloc.h"
+#include <alloc.h>
+#include <built_ins.h>
 
 #include "common.h"
 #include "associative_memory.h"
@@ -21,8 +22,9 @@ __host uint32_t buffer_channel_offset;
 __host uint32_t buffer_channel_usable_length;
 
 perfcounter_t total_cycles = 0;
+perfcounter_t compute_N_gram_top_cycles = 0;
+perfcounter_t compute_N_gram_bottom_cycles = 0;
 perfcounter_t alloc_buffers_cycles = 0;
-perfcounter_t compute_N_gram_cycles = 0;
 perfcounter_t bit_mod_cycles = 0;
 
 /**
@@ -84,37 +86,32 @@ static int dpu_hdc() {
             // Spatial and Temporal Encoder: computes the N-gram.
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                CYCLES_COUNT_START(&total_cycles);
                 compute_N_gram(quantized_buffer, iM, chAM, q);
-                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
             } else {
-                CYCLES_COUNT_START(&total_cycles);
                 compute_N_gram(quantized_buffer, iM, chAM, q_N);
-                CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_cycles);
 
                 CYCLES_COUNT_START(&total_cycles);
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
+                int32_t shifted_q;
                 overflow = q[0] & MASK;
-
                 for(int i = 1; i < BIT_DIM; i++) {
                     old_overflow = overflow;
                     overflow = q[i] & MASK;
-                    q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
-                    q[i] = q_N[i] ^ q[i];
+                    shifted_q = (q[i] >> 1) | (old_overflow << (32 - 1));
+                    q[i] = q_N[i] ^ shifted_q;
                 }
 
                 old_overflow = overflow;
                 overflow = (q[BIT_DIM] >> 16) & MASK;
-                q[BIT_DIM] = (q[BIT_DIM] >> 1) | (old_overflow << (32 - 1));
-                q[BIT_DIM] = q_N[BIT_DIM] ^ q[BIT_DIM];
+                shifted_q = (q[BIT_DIM] >> 1) | (old_overflow << (32 - 1));
+                q[BIT_DIM] = q_N[BIT_DIM] ^ shifted_q;
 
-                q[0] = (q[0] >> 1) | (overflow << (32 - 1));
-                q[0] = q_N[0] ^ q[0];
+                shifted_q = (q[0] >> 1) | (overflow << (32 - 1));
+                q[0] = q_N[0] ^ shifted_q;
                 CYCLES_COUNT_FINISH(&total_cycles, &bit_mod_cycles);
             }
         }
-
         // Classifies the new N-gram through the Associative Memory matrix.
         class = associative_memory_32bit(q, aM_32);
 
@@ -146,8 +143,10 @@ int main() {
     dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
     dbg_printf("alloc_buffers used %ld cycles (%f%%)\n", alloc_buffers_cycles,
                (double)alloc_buffers_cycles / total_cycles);
-    dbg_printf("compute_N_gram used %ld cycles (%f%%)\n", compute_N_gram_cycles,
-               (double)compute_N_gram_cycles / total_cycles);
+    dbg_printf("compute_N_gram_cycles_top used %ld cycles (%f%%)\n", compute_N_gram_top_cycles,
+               (double)compute_N_gram_top_cycles / total_cycles);
+    dbg_printf("compute_N_gram_cycles_bottom used %ld cycles (%f%%)\n", compute_N_gram_bottom_cycles,
+               (double)compute_N_gram_bottom_cycles / total_cycles);
     dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
                (double)bit_mod_cycles / total_cycles);
 
