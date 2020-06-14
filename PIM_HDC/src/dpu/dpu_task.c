@@ -147,6 +147,7 @@ int main() {
                (double)associative_memory_cycles / total_cycles);
     dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
                (double)bit_mod_cycles / total_cycles);
+    (void)total_cycles;
 
     return ret;
 }

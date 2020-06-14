@@ -1,11 +1,13 @@
-#include <dpu.h>
-#include <dpu_memory.h>
-#include <dpu_log.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <assert.h>
+#include <sys/time.h>
+
+#include <dpu.h>
+#include <dpu_memory.h>
+#include <dpu_log.h>
 
 #include "associative_memory.h"
 #include "aux_functions.h"
@@ -186,7 +188,8 @@ static void usage(char const * exe_name) {
 }
 
 int main(int argc, char **argv) {
-
+    struct timeval start;
+	struct timeval end;
     unsigned int use_dpu = 0;
     int ret = 0;
     char const options[] = "dho:";
@@ -219,11 +222,19 @@ int main(int argc, char **argv) {
 
     quantize_set(TEST_SET, data_set.buffer);
 
+    gettimeofday(&start, NULL);
     if (use_dpu) {
         ret = prepare_dpu(data_set);
     } else {
         ret = host_hdc(data_set.buffer);
     }
+    gettimeofday(&end, NULL);
+
+#ifdef DEBUG
+    double start_time = start.tv_sec + start.tv_usec / 1000000.0;
+    double end_time = end.tv_sec + end.tv_usec / 1000000.0;
+    printf("Completed in %f seconds\n", end_time - start_time);
+#endif
 
     free(data_set.buffer);
 
