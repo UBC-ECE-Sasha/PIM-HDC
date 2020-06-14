@@ -1,6 +1,10 @@
 #include "aux_functions.h"
 #include "global_dpu.h"
 #include "cycle_counter.h"
+#include "assert.h"
+#include "built_ins.h"
+
+#define BUILTIN_CAO
 
 /**
  * @brief Computes the maximum Hamming Distance.
@@ -36,7 +40,15 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
     for (int i = 0; i < CLASSES; i++) {
         for (int j = 0; j < BIT_DIM + 1; j++) {
             tmp = q[j] ^ aM[i][j];
+
+#ifdef BUILTIN_CAO
+            int set_bits;
+            // Retrieve number of set bits (count all ones)
+            __builtin_cao_rr(set_bits, tmp);
+            r_tmp += set_bits;
+#else
             r_tmp += number_of_set_bits(tmp);
+#endif
         }
 
         sims[i] = r_tmp;
@@ -61,35 +73,38 @@ void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1],
 
     for (i = 0; i < BIT_DIM + 1; i++) {
         query[i] = 0;
-        CYCLES_COUNT_START(&total_cycles);
+        // CYCLES_COUNT_START(&total_cycles);
         for (j = 0; j < CHANNELS; j++) {
             ix = input[j];
             tmp = channel_iM[ix][i] ^ channel_AM[j][i];
             chHV[j][i] = tmp;
         }
-        CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_top_cycles);
+        // CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_top_cycles);
         // this is done to make the dimension of the matrix for the componentwise majority odd.
         chHV[CHANNELS][i] = chHV[0][i] ^ chHV[1][i];
 
         // componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
         // and then compute the number of 1's with the function numberOfSetBits(uint32_t).
 
-        CYCLES_COUNT_START(&total_cycles);
         uint32_t majority = 0;
         for (int z = 31; z >= 0; z--) {
 
             for (int j = 0 ; j < CHANNELS + 1; j++) {
-                // Equivalent, but more expensive on DPU
                 majority = majority | (((chHV[j][i] >> z) & 1) << j);
             }
-
-            if (number_of_set_bits(majority) > 2) {
+            int set_bits;
+#ifdef BUILTIN_CAO
+            // Retrieve number of set bits (count all ones)
+            __builtin_cao_rr(set_bits, majority);
+#else
+            set_bits = number_of_set_bits(majority);
+#endif
+            if (set_bits > 2) {
                 query[i] = query[i] | ( 1 << z );
             }
-
             majority = 0;
         }
-        CYCLES_COUNT_FINISH(&total_cycles, &compute_N_gram_bottom_cycles);
+
     }
 
 }
