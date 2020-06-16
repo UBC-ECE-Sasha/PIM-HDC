@@ -10,7 +10,7 @@ ifeq ($(TEST), 1)
 	CFLAGS+=-DTEST
 endif
 
-CFLAGS += -DNR_DPUS=$(NR_DPUS)
+CFLAGS += -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS)
 
 SOURCES = $(wildcard *.c) $(wildcard hdc/*.c)
 HDC_DPU = hdc.dpu

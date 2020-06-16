@@ -14,6 +14,7 @@ endif
 
 # Default
 NR_DPUS ?= 32
+NR_TASKLETS ?= 1
 
 .PHONY: default all clean
 
@@ -26,7 +27,7 @@ HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -IPIM-common/common/include
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) $(INC) -c $< -o $@ $(DPU_OPTS)
+	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) $(INC) -c $< -o $@ $(DPU_OPTS)
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 
@@ -34,7 +35,7 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) $(INC) -o $@ $(DPU_OPTS)
 
 dpu:
-	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) TEST=$(TEST) $(MAKE) -C src/dpu
+	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) NR_TASKLETS=$(NR_TASKLETS) TEST=$(TEST) $(MAKE) -C src/dpu
 
 clean:
 	find . -type f -name '*.o' -delete
