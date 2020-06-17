@@ -1,3 +1,5 @@
+#include "global_dpu.h"
+
 #include "associative_memory.h"
 #include "aux_functions.h"
 

@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <alloc.h>
 #include <built_ins.h>
+#include <handshake.h>
+#include <assert.h>
 #include <string.h>
 
 #include "global_dpu.h"
@@ -18,6 +20,7 @@
 #define MASK 1
 #define MRAM_MAX_READ_SIZE 2048
 
+#define TASKLET_SETUP 0
 __host __mram_ptr int8_t *input_buffer;
 __host __mram_ptr uint8_t *mram_chAM;
 __host __mram_ptr uint8_t *mram_iM;
@@ -33,11 +36,8 @@ __host int32_t number_of_input_samples;
 __host int32_t n;
 __host int32_t im_length;
 
-__dma_aligned uint32_t *chAM;
-__dma_aligned uint32_t *iM;
-__dma_aligned uint32_t *aM_32;
-__dma_aligned uint32_t *chHV;
-
+// __host __mram_ptr uint8_t *output_buffer;
+__host uint32_t output_buffer_length;
 perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
 perfcounter_t associative_memory_cycles = 0;
@@ -107,7 +107,7 @@ static int alloc_buffers(int32_t **read_buf) {
  *
  * @return Non-zero on failure.
  */
-static int dpu_hdc() {
+static int dpu_hdc(int32_t *result, uint32_t result_offset, int32_t read_buf[CHANNELS][SAMPLE_SIZE_MAX]) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
@@ -124,6 +124,7 @@ static int dpu_hdc() {
 
     int ret = 0;
 
+    int result_num = 1;
     __dma_aligned int32_t *read_buf;
 
     ret = alloc_buffers(&read_buf);
@@ -178,10 +179,14 @@ static int dpu_hdc() {
         CYCLES_COUNT_START(&counter);
         // Classifies the new N-gram through the Associative Memory matrix.
         class = associative_memory_32bit(q, aM_32);
+        // result[result_offset + result_num] = associative_memory_32bit(q, aM_32);
         CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
         printf("%d\n", class);
-
+        // printf("%d\n", result[result_offset + result_num]);
+        // result_num++;
     }
+
+    // result[result_offset] = result_num - 1;
 
     return ret;
 }
@@ -190,15 +195,30 @@ int main() {
     uint8_t idx = me();
     // (void) idx;
 
-    dbg_printf("DPU starting, tasklet %d\n", idx);
+    dbg_printf("DPU starting, tasklet %u\n", idx);
 
     /* Initialize cycle counters */
     perfcounter_config(COUNTER_CONFIG, true);
 
     int ret = 0;
 
+    if (idx == TASKLET_SETUP) {
+        dbg_printf("Setup tasklet %u\n", idx);
+        if ((ret = alloc_buffers(data_buf)) != 0) {
+            return ret;
+        }
+        if (NR_TASKLETS > 1) {
+            handshake_notify();
+        }
+    } else {
+        handshake_wait_for(TASKLET_SETUP);
+    }
+
+    /* Will fault on ENOMEM, already aligned */
+    // int32_t *output = mem_alloc(output_buffer_length * sizeof(int32_t));
+    // uint32_t idx_offset = (buffer_channel_length / N) + idx;
     if (buffer_channel_length > 0) {
-        ret = dpu_hdc();
+        ret = dpu_hdc(NULL, 0, data_buf);
     } else {
         printf("No work to do\n");
     }

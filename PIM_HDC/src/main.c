@@ -63,6 +63,13 @@ static int prepare_dpu(in_buffer data_set) {
     uint32_t aligned_buffer_size = ALIGN(buffer_channel_usable_length * sizeof(int32_t), 8);
     uint32_t buff_offset = 0;
 
+    /* output */
+
+    /* First entry for each tasklet contains length */
+    uint32_t output_buffer_length = (buffer_channel_length / N) + (1 * NR_TASKLETS);
+    uint32_t aligned_output_buffer_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
+    uint32_t output_buffer_start = ALIGN(aligned_buffer_size + 64, 8);
+
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
 
@@ -71,9 +78,15 @@ static int prepare_dpu(in_buffer data_set) {
         dbg_printf("buff_offset = %d\n", buff_offset);
         /* Modified only for last DPU in case uneven */
         if ((dpu_id == (NR_DPUS - 1)) && (NR_DPUS > 1) && (extra_data != 0)) {
+            /* Input */
             buffer_channel_length = buffer_channel_length + extra_data;
             buffer_channel_usable_length = buffer_channel_length; /* No n on last in algorithm */
             aligned_buffer_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
+
+            /* Output */
+            uint32_t extra_result = (buffer_channel_length % N) != 0;
+            output_buffer_length = (buffer_channel_length / N) + extra_result + (1 * NR_TASKLETS);
+            aligned_output_buffer_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
         }
 
         DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
@@ -129,6 +142,7 @@ static int prepare_dpu(in_buffer data_set) {
     int ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
 
     DPU_FOREACH(dpus, dpu) {
+        // DPU_ASSERT(dpu_copy_to(dpu, "output_buffer", 0, &output_buffer_start, sizeof(uint32_t)));
         DPU_ASSERT(dpu_log_read(dpu, stdout));
     }
 
