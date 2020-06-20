@@ -94,7 +94,7 @@ validate_data(char const * output) {
         return errno != 0 ? errno : -1;
     }
 
-    int constants[CONSTANTS];
+    int32_t constants[CONSTANTS];
     size_t sz = sizeof(constants);
     if (fread(constants, 1, sz, file) != sz) {
         return ferror(file);
@@ -180,7 +180,7 @@ generate_data_file(char const * output) {
         return errno != 0 ? errno : -1;
     }
 
-    int constants[CONSTANTS] = {VERSION, DIMENSION, CHANNELS, BIT_DIM, NUMBER_OF_INPUT_SAMPLES, N, IM_LENGTH};
+    int32_t constants[CONSTANTS] = {VERSION, DIMENSION, CHANNELS, BIT_DIM, NUMBER_OF_INPUT_SAMPLES, N, IM_LENGTH};
     fwrite(constants, sizeof(constants), 1, file);
     if ((ret = ferror(file)) != 0) {
         fprintf(stderr, "Failed to write constants to %s", output);
