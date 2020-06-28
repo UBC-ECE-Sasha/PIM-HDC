@@ -27,7 +27,7 @@ HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -IPIM-common/common/include
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) $(INC) -c $< -o $@ $(DPU_OPTS)
+	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) -DHOST=1 $(INC) -c $< -o $@ $(DPU_OPTS)
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 

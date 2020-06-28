@@ -1,4 +1,6 @@
 #include "aux_functions.h"
+#include "host_only.h"
+#include <string.h>
 
 /**
  * @brief Computes the maximum Hamming Distance.
@@ -27,20 +29,13 @@ int max_dist_hamm(int distances[CLASSES]) {
  * @param[in] aM    Associative Memory matrix
  * @param[out] sims Distances' vector
  */
-void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[CLASSES]){
-    int r_tmp = 0;
-
-    uint32_t tmp = 0;
+void hamming_dist(uint32_t q[bit_dim + 1], uint32_t *aM, int sims[CLASSES]){
     for (int i = 0; i < CLASSES; i++) {
-        for (int j = 0; j < BIT_DIM + 1; j++) {
-            tmp = q[j] ^ aM[i][j];
-            r_tmp += number_of_set_bits(tmp);
+        sims[i] = 0;
+        for (int j = 0; j < bit_dim + 1; j++) {
+            sims[i] += number_of_set_bits(q[j] ^ aM[A2D1D(bit_dim + 1, i, j)]);
         }
-
-        sims[i] = r_tmp;
-        r_tmp = 0;
     }
-
 }
 
 /**
@@ -51,44 +46,33 @@ void hamming_dist(uint32_t q[BIT_DIM + 1], uint32_t aM[][BIT_DIM + 1], int sims[
  * @param[in] channel_AM  Continuous Item Memory for the values of a channel
  * @param[out] query      Query hypervector
  */
-void compute_N_gram(int32_t input[CHANNELS], uint32_t channel_iM[][BIT_DIM + 1], uint32_t channel_AM[][BIT_DIM + 1], uint32_t query[BIT_DIM + 1]) {
+void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *channel_AM, uint32_t query[bit_dim + 1]) {
 
-    int ix;
-    uint32_t tmp = 0;
-    int i, j;
-    uint32_t chHV[CHANNELS + 1][BIT_DIM + 1] = {0};
+    uint32_t chHV[channels + 1][bit_dim + 1];
+    memset(chHV, 0, (channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
 
-    for (i = 0; i < BIT_DIM + 1; i++) {
+    for (int i = 0; i < bit_dim + 1; i++) {
         query[i] = 0;
-        for (j = 0; j < CHANNELS; j++) {
-            ix = input[j];
-            tmp = channel_iM[ix][i] ^ channel_AM[j][i];
-            chHV[j][i] = tmp;
+        for (int j = 0; j < channels; j++) {
+            int ix = input[j];
+            chHV[j][i] = channel_iM[A2D1D(bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(bit_dim + 1, j, i)];
         }
-
         // this is done to make the dimension of the matrix for the componentwise majority odd.
-        chHV[CHANNELS][i] = chHV[0][i] ^ chHV[1][i];
+        chHV[channels][i] = chHV[0][i] ^ chHV[1][i];
 
         // componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
         // and then compute the number of 1's with the function numberOfSetBits(uint32_t).
-
-        uint32_t majority = 0;
-
         for (int z = 31; z >= 0; z--) {
-
-            for (int j = 0 ; j < CHANNELS + 1; j++) {
-                // Equivalent, but more expensive on DPU
+            uint32_t majority = 0;
+            for (int j = 0 ; j < channels + 1; j++) {
                 majority = majority | (((chHV[j][i] >> z) & 1) << j);
             }
 
             if (number_of_set_bits(majority) > 2) {
                 query[i] = query[i] | ( 1 << z );
             }
-
-            majority = 0;
         }
     }
-
 }
 
 /**

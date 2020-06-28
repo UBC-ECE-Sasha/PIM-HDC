@@ -1,5 +1,6 @@
 #include "associative_memory.h"
 #include "aux_functions.h"
+#include "host_only.h"
 
 /**
  * @brief Tests the accuracy based on input testing queries.
@@ -8,7 +9,7 @@
  * @param[in] aM_32 Trained associative memory
  * @return          Classification result
  */
-int associative_memory_32bit(uint32_t q_32[BIT_DIM + 1], uint32_t aM_32[][BIT_DIM + 1]) {
+int associative_memory_32bit(uint32_t q_32[bit_dim + 1], uint32_t *aM_32) {
     int sims[CLASSES] = {0};
 
     // Computes Hamming Distances

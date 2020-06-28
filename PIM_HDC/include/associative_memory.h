@@ -3,6 +3,12 @@
 
 #include "init.h"
 
-int associative_memory_32bit(uint32_t q_32[BIT_DIM + 1], uint32_t aM_32[][BIT_DIM + 1]);
+#ifdef HOST
+#include "host_only.h"
+#else
+#include "global_dpu.h"
+#endif
+
+int associative_memory_32bit(uint32_t q_32[bit_dim + 1], uint32_t * aM_32);
 
 #endif
