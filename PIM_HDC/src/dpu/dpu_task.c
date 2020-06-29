@@ -50,6 +50,30 @@ perfcounter_t bit_mod_cycles = 0;
 // uint32_t aM_32[N][BIT_DIM + 1];
 
 /**
+ * @brief Fill @p buf with data from @p mram_ptr
+ *
+ * @param[out] buf       Buffer to transfer @p transfer_size bytes to
+ * @param[in]  mram_ptr  Buffer to transfer @p transfer_size bytes from
+ */
+static void alloc_chunks(uint32_t **buf, __mram_ptr uint8_t * mram_ptr, uint32_t transfer_size) {
+    uint32_t aligned_transfer_size = ALIGN(transfer_size, 8);
+    *buf = mem_alloc(transfer_size);
+    uint32_t transfer_chunks = aligned_transfer_size / MRAM_MAX_READ_SIZE;
+    uint32_t transfer_remainder = aligned_transfer_size % MRAM_MAX_READ_SIZE;
+
+    uint8_t * buf_loc = NULL;
+    for (int i = 0; i < transfer_chunks; i++) {
+        buf_loc = &((uint8_t *)(*buf))[i * MRAM_MAX_READ_SIZE];
+        mram_read(&mram_ptr[i * MRAM_MAX_READ_SIZE], buf_loc, MRAM_MAX_READ_SIZE);
+    }
+
+    if (transfer_remainder != 0) {
+        buf_loc = &((uint8_t *)(*buf))[transfer_chunks * MRAM_MAX_READ_SIZE];
+        mram_read(&mram_ptr[transfer_chunks * MRAM_MAX_READ_SIZE], buf_loc, ALIGN(transfer_remainder, 8));
+    }
+}
+
+/**
  * @brief Fill @p read_buf with data from @p input_buffer, populate globals
  *
  * @param[out] read_buf    Buffers filled with sample data.
@@ -64,51 +88,16 @@ static int alloc_buffers(int32_t **read_buf) {
     }
 
     // chAM
-    transfer_size = ALIGN(channels * (bit_dim + 1) * sizeof(uint32_t), 8);
-    chAM = mem_alloc(transfer_size);
-    uint32_t transfer_chunks = transfer_size / MRAM_MAX_READ_SIZE;
-    uint32_t transfer_remainder = transfer_size % MRAM_MAX_READ_SIZE;
-
-    for (int i = 0; i < transfer_chunks; i++) {
-        mram_read(&mram_chAM[i * MRAM_MAX_READ_SIZE], (uint8_t *)chAM + i * MRAM_MAX_READ_SIZE, MRAM_MAX_READ_SIZE);
-    }
-
-    if (transfer_remainder != 0) {
-        mram_read(&mram_chAM[transfer_chunks * MRAM_MAX_READ_SIZE],
-                  &((uint8_t *)chAM)[transfer_chunks * MRAM_MAX_READ_SIZE], ALIGN(transfer_remainder, 8));
-    }
+    transfer_size = channels * (bit_dim + 1) * sizeof(uint32_t);
+    alloc_chunks(&chAM, mram_chAM, transfer_size);
 
     // iM
-    transfer_size = ALIGN(im_length * (bit_dim + 1) * sizeof(uint32_t), 8);
-    iM = mem_alloc(transfer_size);
-    transfer_chunks = transfer_size / MRAM_MAX_READ_SIZE;
-    transfer_remainder = transfer_size % MRAM_MAX_READ_SIZE;
-
-    for (int i = 0; i < transfer_chunks; i++) {
-        mram_read(&mram_iM[i * MRAM_MAX_READ_SIZE], (uint8_t *)iM + i * MRAM_MAX_READ_SIZE, MRAM_MAX_READ_SIZE);
-    }
-
-    if (transfer_remainder != 0) {
-        mram_read(&mram_iM[transfer_chunks * MRAM_MAX_READ_SIZE],
-                  (uint8_t *)iM + transfer_chunks * MRAM_MAX_READ_SIZE, ALIGN(transfer_remainder, 8));
-    }
+    transfer_size = im_length * (bit_dim + 1) * sizeof(uint32_t);
+    alloc_chunks(&iM, mram_iM, transfer_size);
 
     // aM_32
-    transfer_size = ALIGN(n * (bit_dim + 1) * sizeof(uint32_t), 8);
-    aM_32 = mem_alloc(transfer_size);
-    transfer_chunks = transfer_size / MRAM_MAX_READ_SIZE;
-    transfer_remainder = transfer_size % MRAM_MAX_READ_SIZE;
-
-    for (int i = 0; i < transfer_chunks; i++) {
-        mram_read(&mram_aM_32[i * MRAM_MAX_READ_SIZE], (uint8_t *)aM_32 + i * MRAM_MAX_READ_SIZE, MRAM_MAX_READ_SIZE);
-    }
-
-    if (transfer_remainder != 0) {
-        mram_read(&mram_aM_32[transfer_chunks * MRAM_MAX_READ_SIZE],
-                  (uint8_t *)aM_32 + transfer_chunks * MRAM_MAX_READ_SIZE, ALIGN(transfer_remainder, 8));
-    }
-
-    // uint32_t chHV[channels + 1][bit_dim + 1];
+    transfer_size = n * (bit_dim + 1) * sizeof(uint32_t);
+    alloc_chunks(&aM_32, mram_aM_32, transfer_size);
 
     return 0;
 }
