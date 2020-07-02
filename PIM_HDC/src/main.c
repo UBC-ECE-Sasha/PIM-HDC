@@ -42,17 +42,17 @@ static int prepare_dpu(in_buffer data_set) {
     /* Section of buffer for one channel, without samples not divisible by n */
     uint32_t samples = number_of_input_samples / NR_DPUS;
     /* Remove samples not divisible by n */
-    samples -= samples % n;
+    uint32_t chunk_size = samples - (samples % n);
     /* Extra data for last DPU */
-    uint32_t extra_data = number_of_input_samples - (samples * NR_DPUS);
+    uint32_t extra_data = number_of_input_samples - (chunk_size * NR_DPUS);
 
-    dbg_printf("samples = %d / %d = %d\n", number_of_input_samples, NR_DPUS, samples);
-    if (samples > SAMPLE_SIZE_MAX) {
-        fprintf(stderr, "samples per dpu (%u) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
-                samples, SAMPLE_SIZE_MAX);
+    dbg_printf("chunk_size = %d / %d = %d\n", number_of_input_samples, NR_DPUS, chunk_size);
+    if (chunk_size > SAMPLE_SIZE_MAX) {
+        fprintf(stderr, "chunk_size per dpu (%u) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
+                chunk_size, SAMPLE_SIZE_MAX);
     }
 
-    uint32_t buffer_channel_length = samples;
+    uint32_t buffer_channel_length = chunk_size;
 
     /* + n to account for + z in algorithm (unless 1 DPU) */
     uint32_t buffer_channel_usable_length = buffer_channel_length;
@@ -115,7 +115,7 @@ static int prepare_dpu(in_buffer data_set) {
             for (int i = 0; i < channels; i++) {
                 uint8_t * ta = (uint8_t *)(&data_set.buffer[(i * number_of_input_samples) + buff_offset]);
                 /* Check input dataset */
-                dbg_printf("INPUT data_set[%d] (%u bytes) (%u samples, %u usable):\n", i, aligned_buffer_size, buffer_channel_length, buffer_channel_usable_length);
+                dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, aligned_buffer_size, buffer_channel_length, buffer_channel_usable_length);
                 DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, mram_buffers_loc, ta, aligned_buffer_size, 0));
                 mram_buffers_loc += aligned_buffer_size;
             }
