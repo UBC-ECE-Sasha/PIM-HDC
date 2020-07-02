@@ -1,0 +1,6 @@
+*.o
+*.bin
+datagen
+/data/data.h
+/cmake-build-*
+/.idea/
