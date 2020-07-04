@@ -19,14 +19,10 @@ jobs:
       - name: Build DEBUG=1
         run: cd PIM_HDC && DEBUG=1 make
       - name: "DEBUG: Run on host"
-        run: cd PIM_HDC && ./pim_hdc -i data/small-data.bin
+        run: cd PIM_HDC && ./pim_hdc -i data/small-data.bin -s
       - name: "DEBUG: Run on DPU"
-        run: cd PIM_HDC && ./pim_hdc -d -i data/small-data.bin
+        run: cd PIM_HDC && ./pim_hdc -d -i data/small-data.bin -s
       - name: Build
         run: cd PIM_HDC && make clean && make
-      - name: Run on host
-        run: cd PIM_HDC && ./pim_hdc -i data/small-data.bin | tee host.results.log
-      - name: Run on DPU
-        run: cd PIM_HDC && ./pim_hdc -d -i data/small-data.bin | tee dpu.results.log
-      - name: Compare results
-        run: cd PIM_HDC && [ -z "$(diff host.results.log dpu.results.log)" ] || exit 1
+      - name: Run compare test
+        run: cd PIM_HDC && ./pim_hdc -i data/small-data.bin -s -t
