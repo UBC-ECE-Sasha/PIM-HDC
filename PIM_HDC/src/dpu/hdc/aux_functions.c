@@ -3,7 +3,6 @@
 #include <alloc.h>
 
 #include "aux_functions.h"
-#include "global_dpu.h"
 #include "cycle_counter.h"
 
 

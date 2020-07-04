@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <alloc.h>
 #include <built_ins.h>
+#include <handshake.h>
+#include <assert.h>
 #include <string.h>
 
 #include "global_dpu.h"
@@ -18,10 +20,16 @@
 #define MASK 1
 #define MRAM_MAX_READ_SIZE 2048
 
+#define TASKLET_SETUP 0
 __host __mram_ptr int8_t *input_buffer;
 __host __mram_ptr uint8_t *mram_chAM;
 __host __mram_ptr uint8_t *mram_iM;
 __host __mram_ptr uint8_t *mram_aM_32;
+
+__dma_aligned uint32_t *chAM;
+__dma_aligned uint32_t *iM;
+__dma_aligned uint32_t *aM_32;
+__dma_aligned uint32_t *chHV;
 
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_aligned_size;
@@ -33,10 +41,8 @@ __host int32_t number_of_input_samples;
 __host int32_t n;
 __host int32_t im_length;
 
-__dma_aligned uint32_t *chAM;
-__dma_aligned uint32_t *iM;
-__dma_aligned uint32_t *aM_32;
-__dma_aligned uint32_t *chHV;
+__host __mram_ptr uint8_t *output_buffer;
+__host uint32_t output_buffer_length;
 
 perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
@@ -99,6 +105,14 @@ static int alloc_buffers(int32_t **read_buf) {
     transfer_size = n * (bit_dim + 1) * sizeof(uint32_t);
     alloc_chunks(&aM_32, mram_aM_32, transfer_size);
 
+    // chHV
+    // uint32_t idx = me();
+    // chHV = mem_alloc((idx + 1) * sizeof(uint32_t *));
+    // for(int i = 0; i < (idx + 1); i++) {
+    //     chHV[i] = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
+    // }
+    chHV = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
+
     return 0;
 }
 
@@ -107,29 +121,19 @@ static int alloc_buffers(int32_t **read_buf) {
  *
  * @return Non-zero on failure.
  */
-static int dpu_hdc() {
+static int dpu_hdc(int32_t *result, uint32_t result_offset, int32_t *read_buf) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
     uint32_t *q_N = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
     int32_t *quantized_buffer = mem_alloc(channels * sizeof(uint32_t));
-    chHV = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
 
     memset(q, 0, (bit_dim + 1) * sizeof(uint32_t));
     memset(q_N, 0, (bit_dim + 1) * sizeof(uint32_t));
     memset(quantized_buffer, 0, channels * sizeof(uint32_t));
-    memset(chHV, 0, (channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
-
-    int class;
 
     int ret = 0;
-
-    __dma_aligned int32_t *read_buf;
-
-    ret = alloc_buffers(&read_buf);
-    if (ret != 0) {
-        return ret;
-    }
+    int result_num = 0;
 
     for(int ix = 0; ix < buffer_channel_length; ix += n) {
 
@@ -175,43 +179,64 @@ static int dpu_hdc() {
                 CYCLES_COUNT_FINISH(counter, &bit_mod_cycles);
             }
         }
+
         CYCLES_COUNT_START(&counter);
         // Classifies the new N-gram through the Associative Memory matrix.
-        class = associative_memory_32bit(q, aM_32);
+        result[result_offset + result_num] = associative_memory_32bit(q, aM_32);
         CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
-        printf("%d\n", class);
 
+        result_num++;
     }
+
+    dbg_printf("%d results\n", result_num);
 
     return ret;
 }
 
 int main() {
-    uint8_t idx = me();
-    // (void) idx;
+    uint32_t idx = me();
 
-    dbg_printf("DPU starting, tasklet %d\n", idx);
+    printf("DPU starting, tasklet %u\n", idx);
 
     /* Initialize cycle counters */
     perfcounter_config(COUNTER_CONFIG, true);
 
     int ret = 0;
 
+    __dma_aligned int32_t *read_buf;
+
+    if (idx == TASKLET_SETUP) {
+        dbg_printf("Setup tasklet %u\n", idx);
+        if ((ret = alloc_buffers(&read_buf)) != 0) {
+            return ret;
+        }
+        if (NR_TASKLETS > 1) {
+            handshake_notify();
+        }
+    } else {
+        handshake_wait_for(TASKLET_SETUP);
+    }
+
+    /* Will fault on ENOMEM, already aligned */
+    uint32_t out_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
+    int32_t *output = mem_alloc(out_size);
+    uint32_t idx_offset = (buffer_channel_length / n) * idx;
     if (buffer_channel_length > 0) {
-        ret = dpu_hdc();
+        ret = dpu_hdc(output, idx_offset, read_buf);
     } else {
         printf("No work to do\n");
     }
 
+    mram_write(output, output_buffer, out_size);
+
     perfcounter_t total_cycles = perfcounter_get();
-    dbg_printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
-    dbg_printf("compute_N_gram_cycles used %ld cycles (%f%%)\n", compute_N_gram_cycles,
+    printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
+    printf("compute_N_gram_cycles used %ld cycles (%f%%)\n", compute_N_gram_cycles,
                (double)compute_N_gram_cycles / total_cycles);
-    dbg_printf("associative_memory_cycles used %ld cycles (%f%%)\n", associative_memory_cycles,
+    printf("associative_memory_cycles used %ld cycles (%f%%)\n", associative_memory_cycles,
                (double)associative_memory_cycles / total_cycles);
-    dbg_printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
+    printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
                (double)bit_mod_cycles / total_cycles);
-    (void)total_cycles;
 
     return ret;
 }
