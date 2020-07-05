@@ -374,9 +374,8 @@ int main(int argc, char **argv) {
     }
 
     uint32_t buffer_size = (sizeof(int32_t) * number_of_input_samples * channels);
-    int32_t *data_set;
-
-    if ((data_set = malloc(buffer_size)) == NULL) {
+    int32_t *data_set = malloc(buffer_size);
+    if (data_set == NULL) {
         nomem();
     }
 

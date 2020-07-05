@@ -7,7 +7,6 @@
 #include <alloc.h>
 #include <built_ins.h>
 #include <handshake.h>
-#include <assert.h>
 #include <string.h>
 
 #include "global_dpu.h"
@@ -30,6 +29,7 @@ __dma_aligned uint32_t *chAM;
 __dma_aligned uint32_t *iM;
 __dma_aligned uint32_t *aM_32;
 __dma_aligned uint32_t *chHV;
+__dma_aligned int32_t *read_buf;
 
 __host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_aligned_size;
@@ -43,6 +43,7 @@ __host int32_t im_length;
 
 __host __mram_ptr uint8_t *output_buffer;
 __host uint32_t output_buffer_length;
+__dma_aligned int32_t *output;
 
 perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
@@ -82,15 +83,16 @@ static void alloc_chunks(uint32_t **buf, __mram_ptr uint8_t * mram_ptr, uint32_t
 /**
  * @brief Fill @p read_buf with data from @p input_buffer, populate globals
  *
- * @param[out] read_buf    Buffers filled with sample data.
  * @return                 @p ENOMEM on failure. Zero on success.
  */
-static int alloc_buffers(int32_t **read_buf) {
+static int alloc_buffers(uint32_t out_size) {
+    output = mem_alloc(out_size);
+
     uint32_t transfer_size = ALIGN(buffer_channel_aligned_size, 8);
-    *read_buf = mem_alloc(channels * transfer_size);
+    read_buf = mem_alloc(channels * transfer_size);
     for (int i = 0; i < channels; i++) {
         mram_read(&input_buffer[i * buffer_channel_aligned_size],
-                      &(*read_buf)[i * buffer_channel_usable_length], transfer_size);
+                      &read_buf[i * buffer_channel_usable_length], transfer_size);
     }
 
     // chAM
@@ -106,13 +108,8 @@ static int alloc_buffers(int32_t **read_buf) {
     alloc_chunks(&aM_32, mram_aM_32, transfer_size);
 
     // chHV
-    // uint32_t idx = me();
-    // chHV = mem_alloc((idx + 1) * sizeof(uint32_t *));
-    // for(int i = 0; i < (idx + 1); i++) {
-    //     chHV[i] = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
-    // }
     chHV = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
-
+    
     return 0;
 }
 
@@ -121,7 +118,7 @@ static int alloc_buffers(int32_t **read_buf) {
  *
  * @return Non-zero on failure.
  */
-static int dpu_hdc(int32_t *result, uint32_t result_offset, int32_t *read_buf) {
+static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
@@ -135,7 +132,7 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, int32_t *read_buf) {
     int ret = 0;
     int result_num = 0;
 
-    for(int ix = 0; ix < buffer_channel_length; ix += n) {
+    for(int ix = task_begin; ix < task_end; ix += n) {
 
         for(int z = 0; z < n; z++) {
 
@@ -194,7 +191,7 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, int32_t *read_buf) {
 }
 
 int main() {
-    uint32_t idx = me();
+    uint8_t idx = me();
 
     printf("DPU starting, tasklet %u\n", idx);
 
@@ -203,11 +200,9 @@ int main() {
 
     int ret = 0;
 
-    __dma_aligned int32_t *read_buf;
-
+    uint32_t out_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
     if (idx == TASKLET_SETUP) {
-        dbg_printf("Setup tasklet %u\n", idx);
-        if ((ret = alloc_buffers(&read_buf)) != 0) {
+        if ((ret = alloc_buffers(out_size)) != 0) {
             return ret;
         }
         if (NR_TASKLETS > 1) {
@@ -217,14 +212,11 @@ int main() {
         handshake_wait_for(TASKLET_SETUP);
     }
 
-    /* Will fault on ENOMEM, already aligned */
-    uint32_t out_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
-    int32_t *output = mem_alloc(out_size);
     uint32_t idx_offset = (buffer_channel_length / n) * idx;
     if (buffer_channel_length > 0) {
-        ret = dpu_hdc(output, idx_offset, read_buf);
+        ret = dpu_hdc(output, idx_offset, 0, buffer_channel_length);
     } else {
-        printf("No work to do\n");
+        printf("%u: No work to do\n", idx);
     }
 
     mram_write(output, output_buffer, out_size);

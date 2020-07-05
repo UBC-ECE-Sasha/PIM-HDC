@@ -1,10 +1,13 @@
 #include <string.h>
 #include <built_ins.h>
 #include <alloc.h>
+#include <mutex.h>
 
 #include "aux_functions.h"
 #include "cycle_counter.h"
+#include "common.h"
 
+MUTEX_INIT(chHV_mutex);
 
 #define BUILTIN_CAO
 
@@ -62,12 +65,14 @@ void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *cha
 
     // Pseudo-2d array: uint32_t chHV[channels + 1][bit_dim + 1];
 
+    // Not ideal...
+    mutex_lock(chHV_mutex);
+
     for (int i = 0; i < bit_dim + 1; i++) {
         query[i] = 0;
         for (int j = 0; j < channels; j++) {
             int ix = input[j];
             chHV[A2D1D(bit_dim + 1, j, i)] = channel_iM[A2D1D(bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(bit_dim + 1, j, i)];
-
         }
         // this is done to make the dimension of the matrix for the componentwise majority odd.
         chHV[A2D1D(bit_dim + 1, channels, i)] = chHV[i] ^ chHV[bit_dim + 1 + i];
@@ -86,6 +91,7 @@ void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *cha
         }
     }
 
+    mutex_unlock(chHV_mutex);
 }
 
 /**
