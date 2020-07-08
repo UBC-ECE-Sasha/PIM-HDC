@@ -45,6 +45,7 @@ __host int32_t bit_dim;
 __host int32_t number_of_input_samples;
 __host int32_t n;
 __host int32_t im_length;
+__host dpu_input_data dpu_data;
 
 __host __mram_ptr uint8_t *output_buffer;
 __host uint32_t output_buffer_length;
@@ -219,52 +220,11 @@ int main() {
 
     barrier_wait(&start_barrier);
 
-    /* Computations must be n divisible unless extra at end */
-    int32_t num_computations = buffer_channel_length / n;
+    printf("%u: task_begin = %u, task_end = %u\n", idx, dpu_data.task_end[idx], dpu_data.task_begin[idx]);
 
-    // TODO: Modulus causes deadlock or crash. Why?
-    // int32_t remaining_num = buffer_channel_length % n;
-    int32_t remaining_num = buffer_channel_length;
-    while (remaining_num >= n) remaining_num -= n;
-
-    dbg_printf("%u: buffer_channel_length = %d\n", idx, buffer_channel_length);
-    dbg_printf("%u: num_computations = %d\n", idx, num_computations);
-    dbg_printf("%u: remaining_num = %d\n", idx, remaining_num);
-
-    uint32_t task_begin = 0;
-    uint32_t task_end = 0;
-
-    if (num_computations >= (idx + 1)) {
-        if (num_computations < NR_TASKLETS) {
-            task_begin = idx * n;
-            task_end = task_begin + n;
-        } else {
-            uint32_t split_computations = (num_computations / NR_TASKLETS) * n;
-            dbg_printf("%u: split_computations = %d\n", idx, split_computations);
-
-            task_begin = idx * split_computations;
-            task_end = task_begin + split_computations;
-
-            if ((idx + 1) == NR_TASKLETS) {
-                // TODO: Modulus causes deadlock or crash. Why?
-                // uint32_t task_extra = (num_computations % NR_TASKLETS);
-                int32_t task_extra = num_computations;
-                while (task_extra >= NR_TASKLETS) task_extra -= NR_TASKLETS;
-
-                dbg_printf("%u: task_extra = %d\n", idx, task_extra);
-                task_end += remaining_num + (task_extra * n);
-            }
-        }
-    }
-
-    uint32_t task_samples = task_end - task_begin;
-    uint32_t idx_offset = (task_samples / n) * idx;
-    dbg_printf("%u: idx_offset = %u\n", idx, idx_offset);
-    dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
-
-    if ((task_end - task_begin) > 0) {
+    if ((dpu_data.task_end[idx] - dpu_data.task_begin[idx]) > 0) {
         printf("%u: Work to do\n", idx);
-        ret = dpu_hdc(output, idx_offset, task_begin, task_end);
+        ret = dpu_hdc(output, dpu_data.idx_offset[idx], dpu_data.task_begin[idx], dpu_data.task_end[idx]);
     } else {
         printf("%u: No work to do\n", idx);
     }

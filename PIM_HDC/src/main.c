@@ -23,6 +23,46 @@
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
+static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
+    /* Computations must be n divisible unless extra at end */
+    int32_t num_computations = buffer_channel_length / n;
+    int32_t remaining_computations = buffer_channel_length % n;
+
+    dpu_input_data input;
+
+    for (uint8_t idx = 0; idx < NR_TASKLETS; idx++) {
+        uint32_t task_begin = 0;
+        uint32_t task_end = 0;
+
+        if (num_computations >= (idx + 1)) {
+            if (num_computations < NR_TASKLETS) {
+                task_begin = idx * n;
+                task_end = task_begin + n;
+            } else {
+                uint32_t split_computations = (num_computations / NR_TASKLETS) * n;
+                task_begin = idx * split_computations;
+                task_end = task_begin + split_computations;
+
+                if ((idx + 1) == NR_TASKLETS) {
+                    uint32_t task_extra = (num_computations % NR_TASKLETS);
+                    task_end += remaining_computations + (task_extra * n);
+                }
+            }
+        }
+
+        input.task_begin[idx] = task_begin;
+        input.task_end[idx] = task_end;
+
+        uint32_t task_samples = input.task_end[0] - input.task_begin[0];
+        input.idx_offset[idx] = (task_samples / n) * idx;
+
+        dbg_printf("%u: idx_offset = %u\n", idx, input.idx_offset[idx]);
+        dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
+    }
+
+    return input;
+}
+
 /**
  * @brief Prepare the DPU context and upload the program to the DPU.
  *
@@ -70,12 +110,16 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     uint32_t output_buffer_length[NR_DPUS];
     output_buffer_length[0] = (buffer_channel_length / n);
 
+
+
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
 
     DPU_FOREACH(dpus, dpu) {
         dbg_printf("DPU %d\n", dpu_id);
         DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
+
+        dpu_input_data input = setup_dpu_data(buffer_channel_length);
 
         // Variables in WRAM
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_length", 0, &buffer_channel_length, sizeof(buffer_channel_length)));
@@ -86,6 +130,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         DPU_ASSERT(dpu_copy_to(dpu, "bit_dim", 0, &bit_dim, sizeof(bit_dim)));
         DPU_ASSERT(dpu_copy_to(dpu, "n", 0, &n, sizeof(n)));
         DPU_ASSERT(dpu_copy_to(dpu, "im_length", 0, &im_length, sizeof(im_length)));
+        DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &input, sizeof(input)));
 
         // Variables in MRAM
 

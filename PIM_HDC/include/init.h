@@ -18,4 +18,10 @@
 // Sample size max per DPU in each channel in 32 bit integers (make sure aligned bytes)
 #define SAMPLE_SIZE_MAX 512
 
+typedef struct dpu_input_data {
+    uint32_t task_begin[NR_TASKLETS];
+    uint32_t task_end[NR_TASKLETS];
+    uint32_t idx_offset[NR_TASKLETS];
+} dpu_input_data;
+
 #endif // INIT_H_
