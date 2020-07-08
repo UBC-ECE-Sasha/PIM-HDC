@@ -8,6 +8,7 @@
 #include <built_ins.h>
 #include <handshake.h>
 #include <string.h>
+#include <barrier.h>
 
 #include "global_dpu.h"
 #include "common.h"
@@ -20,6 +21,10 @@
 #define MRAM_MAX_READ_SIZE 2048
 
 #define TASKLET_SETUP 0
+
+BARRIER_INIT(start_barrier, NR_TASKLETS);
+BARRIER_INIT(finish_barrier, NR_TASKLETS);
+
 __host __mram_ptr int8_t *input_buffer;
 __host __mram_ptr uint8_t *mram_chAM;
 __host __mram_ptr uint8_t *mram_iM;
@@ -109,7 +114,7 @@ static int alloc_buffers(uint32_t out_size) {
 
     // chHV
     chHV = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
-    
+
     return 0;
 }
 
@@ -121,13 +126,18 @@ static int alloc_buffers(uint32_t out_size) {
 static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
-    uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
-    uint32_t *q_N = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
-    int32_t *quantized_buffer = mem_alloc(channels * sizeof(uint32_t));
 
-    memset(q, 0, (bit_dim + 1) * sizeof(uint32_t));
-    memset(q_N, 0, (bit_dim + 1) * sizeof(uint32_t));
-    memset(quantized_buffer, 0, channels * sizeof(uint32_t));
+    // No room on heap
+    // uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
+    // uint32_t *q_N = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
+    // int32_t *quantized_buffer = mem_alloc(channels * sizeof(uint32_t));
+    // memset(q, 0, (bit_dim + 1) * sizeof(uint32_t));
+    // memset(q_N, 0, (bit_dim + 1) * sizeof(uint32_t));
+    // memset(quantized_buffer, 0, channels * sizeof(uint32_t));
+
+    uint32_t q[MAX_BIT_DIM+1];
+    uint32_t q_N[MAX_BIT_DIM+1];
+    int32_t quantized_buffer[MAX_CHANNELS];
 
     int ret = 0;
     int result_num = 0;
@@ -193,7 +203,7 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
 int main() {
     uint8_t idx = me();
 
-    printf("DPU starting, tasklet %u\n", idx);
+    printf("DPU starting, tasklet %u / %u\n", idx, NR_TASKLETS);
 
     /* Initialize cycle counters */
     perfcounter_config(COUNTER_CONFIG, true);
@@ -205,19 +215,61 @@ int main() {
         if ((ret = alloc_buffers(out_size)) != 0) {
             return ret;
         }
-        if (NR_TASKLETS > 1) {
-            handshake_notify();
-        }
-    } else {
-        handshake_wait_for(TASKLET_SETUP);
     }
 
-    uint32_t idx_offset = (buffer_channel_length / n) * idx;
-    if (buffer_channel_length > 0) {
-        ret = dpu_hdc(output, idx_offset, 0, buffer_channel_length);
+    barrier_wait(&start_barrier);
+
+    /* Computations must be n divisible unless extra at end */
+    int32_t num_computations = buffer_channel_length / n;
+
+    // TODO: Modulus causes deadlock or crash. Why?
+    // int32_t remaining_num = buffer_channel_length % n;
+    int32_t remaining_num = buffer_channel_length;
+    while (remaining_num >= n) remaining_num -= n;
+
+    dbg_printf("%u: buffer_channel_length = %d\n", idx, buffer_channel_length);
+    dbg_printf("%u: num_computations = %d\n", idx, num_computations);
+    dbg_printf("%u: remaining_num = %d\n", idx, remaining_num);
+
+    uint32_t task_begin = 0;
+    uint32_t task_end = 0;
+
+    if (num_computations >= (idx + 1)) {
+        if (num_computations < NR_TASKLETS) {
+            task_begin = idx * n;
+            task_end = task_begin + n;
+        } else {
+            uint32_t split_computations = (num_computations / NR_TASKLETS) * n;
+            dbg_printf("%u: split_computations = %d\n", idx, split_computations);
+
+            task_begin = idx * split_computations;
+            task_end = task_begin + split_computations;
+
+            if ((idx + 1) == NR_TASKLETS) {
+                // TODO: Modulus causes deadlock or crash. Why?
+                // uint32_t task_extra = (num_computations % NR_TASKLETS);
+                int32_t task_extra = num_computations;
+                while (task_extra >= NR_TASKLETS) task_extra -= NR_TASKLETS;
+
+                dbg_printf("%u: task_extra = %d\n", idx, task_extra);
+                task_end += remaining_num + (task_extra * n);
+            }
+        }
+    }
+
+    uint32_t task_samples = task_end - task_begin;
+    uint32_t idx_offset = (task_samples / n) * idx;
+    dbg_printf("%u: idx_offset = %u\n", idx, idx_offset);
+    dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
+
+    if ((task_end - task_begin) > 0) {
+        printf("%u: Work to do\n", idx);
+        ret = dpu_hdc(output, idx_offset, task_begin, task_end);
     } else {
         printf("%u: No work to do\n", idx);
     }
+
+    barrier_wait(&finish_barrier);
 
     mram_write(output, output_buffer, out_size);
 

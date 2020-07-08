@@ -4,6 +4,9 @@
 #include <perfcounter.h>
 #include <defs.h>
 
+#define MAX_BIT_DIM 313
+#define MAX_CHANNELS 4
+
 // Dimension of the hypervectors
 extern int32_t dimension;
 

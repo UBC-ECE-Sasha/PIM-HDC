@@ -130,8 +130,6 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         buff_offset += buffer_channel_length;
         dpu_id++;
 
-        output_buffer_length[dpu_id] = output_buffer_length[0];
-
         /* Modified only for last DPU in case uneven */
         if ((dpu_id == (NR_DPUS - 1)) && (NR_DPUS > 1) && (extra_data != 0)) {
             /* Input */
@@ -142,6 +140,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
             /* Output */
             uint32_t extra_result = (buffer_channel_length % n) != 0;
             output_buffer_length[dpu_id] = (buffer_channel_length / n) + extra_result;
+        } else if (dpu_id < NR_DPUS) {
+            output_buffer_length[dpu_id] = output_buffer_length[0];
         }
     }
 
@@ -298,7 +298,7 @@ static int compare_results(hdc_data *dpu_data, hdc_data *host_data) {
     }
     double time_diff = dpu_data->execution_time - host_data->execution_time;
     double percent_diff = dpu_data->execution_time / host_data->execution_time;
-    printf("Host was %fs (%f%%) faster than dpu\n", time_diff, percent_diff*100);
+    printf("Host was %fs (%f x) faster than dpu\n", time_diff, percent_diff);
 
     return ret;
 }

@@ -10,7 +10,7 @@ ifeq ($(TEST), 1)
 	CFLAGS+=-DTEST
 endif
 
-CFLAGS += -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS)
+CFLAGS += -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) -DSTACK_SIZE_DEFAULT=3072
 # To Set stack: -DSTACK_SIZE_DEFAULT=<size>
 
 SOURCES = $(wildcard *.c) $(wildcard hdc/*.c)
