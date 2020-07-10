@@ -16,6 +16,11 @@ endif
 NR_DPUS ?= 32
 NR_TASKLETS ?= 1
 
+MAX_BIT_DIM ?= 313
+MAX_CHANNELS ?= 4
+
+CFLAGS+=-DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) -DHOST=1 -DMAX_BIT_DIM=$(MAX_BIT_DIM) -DMAX_CHANNELS=$(MAX_CHANNELS)
+
 .PHONY: default all clean
 
 default: $(TARGET) dpu
@@ -27,7 +32,7 @@ HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -IPIM-common/common/include
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) -DHOST=1 $(INC) -c $< -o $@ $(DPU_OPTS)
+	$(CC) $(CFLAGS)  $(INC) -c $< -o $@ $(DPU_OPTS)
 
 .PRECIOUS: $(TARGET) $(OBJECTS)
 
@@ -35,7 +40,9 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(OBJECTS) $(INC) -o $@ $(DPU_OPTS)
 
 dpu:
-	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) NR_TASKLETS=$(NR_TASKLETS) TEST=$(TEST) $(MAKE) -C src/dpu
+	DEBUG=$(DEBUG) NR_DPUS=$(NR_DPUS) NR_TASKLETS=$(NR_TASKLETS) \
+	TEST=$(TEST) MAX_BIT_DIM=$(MAX_BIT_DIM) MAX_CHANNELS=$(MAX_CHANNELS) \
+	$(MAKE) -C src/dpu
 
 clean:
 	find . -type f -name '*.o' -delete
