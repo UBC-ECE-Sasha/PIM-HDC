@@ -33,10 +33,8 @@ __host __mram_ptr uint8_t *mram_aM_32;
 __dma_aligned uint32_t *chAM;
 __dma_aligned uint32_t *iM;
 __dma_aligned uint32_t *aM_32;
-__dma_aligned uint32_t *chHV;
 __dma_aligned int32_t *read_buf;
 
-__host uint32_t buffer_channel_length;
 __host uint32_t buffer_channel_aligned_size;
 __host uint32_t buffer_channel_usable_length;
 __host int32_t dimension;
@@ -44,6 +42,7 @@ __host int32_t channels;
 __host int32_t bit_dim;
 __host int32_t number_of_input_samples;
 __host int32_t n;
+__host uint32_t dpu_id;
 __host int32_t im_length;
 __host dpu_input_data dpu_data;
 
@@ -113,9 +112,6 @@ static int alloc_buffers(uint32_t out_size) {
     transfer_size = n * (bit_dim + 1) * sizeof(uint32_t);
     alloc_chunks(&aM_32, mram_aM_32, transfer_size);
 
-    // chHV
-    chHV = mem_alloc((channels + 1) * (bit_dim + 1) * sizeof(uint32_t));
-
     return 0;
 }
 
@@ -132,13 +128,10 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
     // uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
     // uint32_t *q_N = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
     // int32_t *quantized_buffer = mem_alloc(channels * sizeof(uint32_t));
-    // memset(q, 0, (bit_dim + 1) * sizeof(uint32_t));
-    // memset(q_N, 0, (bit_dim + 1) * sizeof(uint32_t));
-    // memset(quantized_buffer, 0, channels * sizeof(uint32_t));
 
-    uint32_t q[MAX_BIT_DIM+1];
-    uint32_t q_N[MAX_BIT_DIM+1];
-    int32_t quantized_buffer[MAX_CHANNELS];
+    uint32_t q[MAX_BIT_DIM+1] = {0};
+    uint32_t q_N[MAX_BIT_DIM+1] = {0};
+    int32_t quantized_buffer[MAX_CHANNELS] = {0};
 
     int ret = 0;
     int result_num = 0;
@@ -193,10 +186,12 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
         result[result_offset + result_num] = associative_memory_32bit(q, aM_32);
         CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
 
+        dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num, result[result_offset + result_num]);
+
         result_num++;
     }
 
-    dbg_printf("%d results\n", result_num);
+    dbg_printf("%u: %d results\n", me(), result_num);
 
     return ret;
 }
@@ -220,10 +215,7 @@ int main() {
 
     barrier_wait(&start_barrier);
 
-    printf("%u: task_begin = %u, task_end = %u\n", idx, dpu_data.task_end[idx], dpu_data.task_begin[idx]);
-
     if ((dpu_data.task_end[idx] - dpu_data.task_begin[idx]) > 0) {
-        printf("%u: Work to do\n", idx);
         ret = dpu_hdc(output, dpu_data.idx_offset[idx], dpu_data.task_begin[idx], dpu_data.task_end[idx]);
     } else {
         printf("%u: No work to do\n", idx);

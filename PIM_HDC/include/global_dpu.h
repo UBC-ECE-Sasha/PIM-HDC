@@ -28,10 +28,8 @@ extern uint32_t *chAM;
 extern uint32_t *iM;
 extern uint32_t *aM_32;
 
-extern uint32_t *chHV;
-
 typedef struct in_buffer {
-    int32_t * buffer;
+    int32_t *buffer;
     uint32_t buffer_size;
 } in_buffer;
 

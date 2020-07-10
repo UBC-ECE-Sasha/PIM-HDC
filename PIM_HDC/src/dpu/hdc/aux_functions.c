@@ -2,6 +2,7 @@
 #include <built_ins.h>
 #include <alloc.h>
 #include <mutex.h>
+#include <stdio.h>
 
 #include "aux_functions.h"
 #include "cycle_counter.h"
@@ -63,26 +64,29 @@ void hamming_dist(uint32_t q[bit_dim + 1], uint32_t *aM, int sims[CLASSES]){
  */
 void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *channel_AM, uint32_t query[bit_dim + 1]) {
 
-    // Pseudo-2d array: uint32_t chHV[channels + 1][bit_dim + 1];
+    // Pseudo-2d array:
 
-    // Not ideal...
-    mutex_lock(chHV_mutex);
+    uint32_t chHV[MAX_CHANNELS + 1] = {0};
 
     for (int i = 0; i < bit_dim + 1; i++) {
         query[i] = 0;
         for (int j = 0; j < channels; j++) {
-            int ix = input[j];
-            chHV[A2D1D(bit_dim + 1, j, i)] = channel_iM[A2D1D(bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(bit_dim + 1, j, i)];
+            int32_t ix = input[j];
+
+            // TODO: Why is this needed?
+            mutex_lock(chHV_mutex);
+            chHV[j] = channel_iM[A2D1D(bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(bit_dim + 1, j, i)];
+            mutex_unlock(chHV_mutex);
         }
+
         // this is done to make the dimension of the matrix for the componentwise majority odd.
-        chHV[A2D1D(bit_dim + 1, channels, i)] = chHV[i] ^ chHV[bit_dim + 1 + i];
+        chHV[channels] = chHV[0] ^ chHV[1];
         // componentwise majority: insert the value of the ith bit of each chHV row in the variable "majority"
         // and then compute the number of 1's with the function numberOfSetBits(uint32_t).
-
         for (int z = 31; z >= 0; z--) {
             uint32_t majority = 0;
             for (int j = 0 ; j < channels + 1; j++) {
-                majority = majority | (((chHV[A2D1D(bit_dim + 1, j, i)] >> z) & 1) << j);
+                majority = majority | (((chHV[j] >> z) & 1) << j);
             }
 
             if (number_of_set_bits(majority) > 2) {
@@ -90,8 +94,6 @@ void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *cha
             }
         }
     }
-
-    mutex_unlock(chHV_mutex);
 }
 
 /**

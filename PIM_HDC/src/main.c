@@ -110,8 +110,6 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     uint32_t output_buffer_length[NR_DPUS];
     output_buffer_length[0] = (buffer_channel_length / n);
 
-
-
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
 
@@ -122,7 +120,6 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         dpu_input_data input = setup_dpu_data(buffer_channel_length);
 
         // Variables in WRAM
-        DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_length", 0, &buffer_channel_length, sizeof(buffer_channel_length)));
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_aligned_size", 0, &aligned_buffer_size, sizeof(aligned_buffer_size)));
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_usable_length", 0, &buffer_channel_usable_length, sizeof(buffer_channel_usable_length)));
         DPU_ASSERT(dpu_copy_to(dpu, "dimension", 0, &dimension, sizeof(dimension)));
@@ -130,6 +127,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         DPU_ASSERT(dpu_copy_to(dpu, "bit_dim", 0, &bit_dim, sizeof(bit_dim)));
         DPU_ASSERT(dpu_copy_to(dpu, "n", 0, &n, sizeof(n)));
         DPU_ASSERT(dpu_copy_to(dpu, "im_length", 0, &im_length, sizeof(im_length)));
+        DPU_ASSERT(dpu_copy_to(dpu, "dpu_id", 0, &dpu_id, sizeof(dpu_id)));
         DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &input, sizeof(input)));
 
         // Variables in MRAM
