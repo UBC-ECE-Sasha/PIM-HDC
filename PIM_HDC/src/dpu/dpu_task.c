@@ -26,13 +26,10 @@ BARRIER_INIT(start_barrier, NR_TASKLETS);
 BARRIER_INIT(finish_barrier, NR_TASKLETS);
 
 __host __mram_ptr int8_t *input_buffer;
-__host __mram_ptr uint8_t *mram_chAM;
-__host __mram_ptr uint8_t *mram_iM;
-__host __mram_ptr uint8_t *mram_aM_32;
 
-__dma_aligned uint32_t *chAM;
-__dma_aligned uint32_t *iM;
-__dma_aligned uint32_t *aM_32;
+__host uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+__host uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+__host uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];
 __dma_aligned int32_t *read_buf;
 
 __host uint32_t buffer_channel_aligned_size;
@@ -62,30 +59,6 @@ perfcounter_t bit_mod_cycles = 0;
 // uint32_t aM_32[N][BIT_DIM + 1];
 
 /**
- * @brief Fill @p buf with data from @p mram_ptr
- *
- * @param[out] buf       Buffer to transfer @p transfer_size bytes to
- * @param[in]  mram_ptr  Buffer to transfer @p transfer_size bytes from
- */
-static void alloc_chunks(uint32_t **buf, __mram_ptr uint8_t * mram_ptr, uint32_t transfer_size) {
-    uint32_t aligned_transfer_size = ALIGN(transfer_size, 8);
-    *buf = mem_alloc(transfer_size);
-    uint32_t transfer_chunks = aligned_transfer_size / MRAM_MAX_READ_SIZE;
-    uint32_t transfer_remainder = aligned_transfer_size % MRAM_MAX_READ_SIZE;
-
-    uint8_t * buf_loc = NULL;
-    for (int i = 0; i < transfer_chunks; i++) {
-        buf_loc = &((uint8_t *)(*buf))[i * MRAM_MAX_READ_SIZE];
-        mram_read(&mram_ptr[i * MRAM_MAX_READ_SIZE], buf_loc, MRAM_MAX_READ_SIZE);
-    }
-
-    if (transfer_remainder != 0) {
-        buf_loc = &((uint8_t *)(*buf))[transfer_chunks * MRAM_MAX_READ_SIZE];
-        mram_read(&mram_ptr[transfer_chunks * MRAM_MAX_READ_SIZE], buf_loc, ALIGN(transfer_remainder, 8));
-    }
-}
-
-/**
  * @brief Fill @p read_buf with data from @p input_buffer, populate globals
  *
  * @return                 @p ENOMEM on failure. Zero on success.
@@ -100,18 +73,6 @@ static int alloc_buffers(uint32_t out_size) {
                       &read_buf[i * buffer_channel_usable_length], transfer_size);
     }
 
-    // chAM
-    transfer_size = channels * (bit_dim + 1) * sizeof(uint32_t);
-    alloc_chunks(&chAM, mram_chAM, transfer_size);
-
-    // iM
-    transfer_size = im_length * (bit_dim + 1) * sizeof(uint32_t);
-    alloc_chunks(&iM, mram_iM, transfer_size);
-
-    // aM_32
-    transfer_size = n * (bit_dim + 1) * sizeof(uint32_t);
-    alloc_chunks(&aM_32, mram_aM_32, transfer_size);
-
     return 0;
 }
 
@@ -124,13 +85,8 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
 
-    // No room on heap
-    // uint32_t *q = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
-    // uint32_t *q_N = mem_alloc((bit_dim + 1) * sizeof(uint32_t));
-    // int32_t *quantized_buffer = mem_alloc(channels * sizeof(uint32_t));
-
-    uint32_t q[MAX_BIT_DIM+1] = {0};
-    uint32_t q_N[MAX_BIT_DIM+1] = {0};
+    uint32_t q[MAX_BIT_DIM + 1] = {0};
+    uint32_t q_N[MAX_BIT_DIM + 1] = {0};
     int32_t quantized_buffer[MAX_CHANNELS] = {0};
 
     int ret = 0;

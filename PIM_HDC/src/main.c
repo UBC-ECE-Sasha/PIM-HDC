@@ -134,20 +134,17 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
 
         // chAM;
         uint32_t transfer_size = ALIGN(channels * (bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "mram_chAM", 0, &mram_buffers_loc, sizeof(mram_buffers_loc)));
-        DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, mram_buffers_loc, (uint8_t *)chAM, transfer_size));
+        DPU_ASSERT(dpu_copy_to(dpu, "chAM", 0, (uint8_t *)chAM, transfer_size));
         mram_buffers_loc += transfer_size;
 
         // iM;
         transfer_size = ALIGN(im_length * (bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "mram_iM", 0, &mram_buffers_loc, sizeof(mram_buffers_loc)));
-        DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, mram_buffers_loc, (uint8_t *)iM, transfer_size));
+        DPU_ASSERT(dpu_copy_to(dpu, "iM", 0, (uint8_t *)iM, transfer_size));
         mram_buffers_loc += transfer_size;
 
         // aM_32;
         transfer_size = ALIGN(n * (bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "mram_aM_32", 0, &mram_buffers_loc, sizeof(mram_buffers_loc)));
-        DPU_ASSERT(dpu_copy_to_mram(dpu.dpu, mram_buffers_loc, (uint8_t *)aM_32, transfer_size));
+        DPU_ASSERT(dpu_copy_to(dpu, "aM_32", 0, (uint8_t *)aM_32, transfer_size));
         mram_buffers_loc += transfer_size;
 
         // dataset:

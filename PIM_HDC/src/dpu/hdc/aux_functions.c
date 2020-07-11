@@ -8,8 +8,6 @@
 #include "cycle_counter.h"
 #include "common.h"
 
-MUTEX_INIT(chHV_mutex);
-
 #define BUILTIN_CAO
 
 /**
@@ -72,11 +70,7 @@ void compute_N_gram(int32_t input[channels], uint32_t *channel_iM, uint32_t *cha
         query[i] = 0;
         for (int j = 0; j < channels; j++) {
             int32_t ix = input[j];
-
-            // TODO: Why is this needed?
-            mutex_lock(chHV_mutex);
             chHV[j] = channel_iM[A2D1D(bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(bit_dim + 1, j, i)];
-            mutex_unlock(chHV_mutex);
         }
 
         // this is done to make the dimension of the matrix for the componentwise majority odd.

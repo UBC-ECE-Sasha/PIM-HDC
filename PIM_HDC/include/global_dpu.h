@@ -21,9 +21,9 @@ extern int32_t n;
 
 extern int32_t im_length;
 
-extern uint32_t *chAM;
-extern uint32_t *iM;
-extern uint32_t *aM_32;
+extern uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+extern uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];
 
 typedef struct in_buffer {
     int32_t *buffer;
