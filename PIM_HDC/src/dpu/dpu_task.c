@@ -25,21 +25,17 @@
 BARRIER_INIT(start_barrier, NR_TASKLETS);
 BARRIER_INIT(finish_barrier, NR_TASKLETS);
 
-__host __mram_ptr int8_t *input_buffer;
+// MRAM
+__host __mram_ptr uint8_t *output_buffer;
 
+// WRAM
 __host uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 __host uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 __host uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];
-__dma_aligned int32_t *read_buf;
-
-__host uint32_t buffer_channel_aligned_size;
-__host uint32_t buffer_channel_usable_length;
-
 __host dpu_input_data dpu_data;
 __host dpu_hdc_vars hd;
 
-__host __mram_ptr uint8_t *output_buffer;
-__host uint32_t output_buffer_length;
+__host int32_t read_buf[ALIGN(MAX_INPUT, 8)];
 __dma_aligned int32_t *output;
 
 perfcounter_t counter = 0;
@@ -54,25 +50,7 @@ perfcounter_t bit_mod_cycles = 0;
 // uint32_t aM_32[N][BIT_DIM + 1];
 
 /**
- * @brief Fill @p read_buf with data from @p input_buffer, populate globals
- *
- * @return                 @p ENOMEM on failure. Zero on success.
- */
-static int alloc_buffers(uint32_t out_size) {
-    output = mem_alloc(out_size);
-
-    uint32_t transfer_size = ALIGN(buffer_channel_aligned_size, 8);
-    read_buf = mem_alloc(hd.channels * transfer_size);
-    for (int i = 0; i < hd.channels; i++) {
-        mram_read(&input_buffer[i * buffer_channel_aligned_size],
-                      &read_buf[i * buffer_channel_usable_length], transfer_size);
-    }
-
-    return 0;
-}
-
-/**
- * @breif Run HDC algorithm on host
+ * @brief Run HDC algorithm on host
  *
  * @return Non-zero on failure.
  */
@@ -92,8 +70,8 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
         for(int z = 0; z < hd.n; z++) {
 
             for(int j = 0; j < hd.channels; j++) {
-                if (ix + z < buffer_channel_usable_length) {
-                    int ind = A2D1D(buffer_channel_usable_length, j, ix + z);
+                if (ix + z < dpu_data.buffer_channel_usable_length) {
+                    int ind = A2D1D(dpu_data.buffer_channel_usable_length, j, ix + z);
                     quantized_buffer[j] = read_buf[ind];
                 }
             }
@@ -157,11 +135,9 @@ int main() {
 
     int ret = 0;
 
-    uint32_t out_size = ALIGN(output_buffer_length * sizeof(int32_t), 8);
+    uint32_t out_size = ALIGN(dpu_data.output_buffer_length * sizeof(int32_t), 8);
     if (idx == TASKLET_SETUP) {
-        if ((ret = alloc_buffers(out_size)) != 0) {
-            return ret;
-        }
+        output = mem_alloc(out_size);
     }
 
     barrier_wait(&start_barrier);
