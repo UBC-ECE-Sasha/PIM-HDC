@@ -25,8 +25,8 @@
 
 static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
     /* Computations must be n divisible unless extra at end */
-    int32_t num_computations = buffer_channel_length / n;
-    int32_t remaining_computations = buffer_channel_length % n;
+    int32_t num_computations = buffer_channel_length / hd.n;
+    int32_t remaining_computations = buffer_channel_length % hd.n;
 
     dpu_input_data input;
 
@@ -36,16 +36,16 @@ static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
 
         if (num_computations >= (idx + 1)) {
             if (num_computations < NR_TASKLETS) {
-                task_begin = idx * n;
-                task_end = task_begin + n;
+                task_begin = idx * hd.n;
+                task_end = task_begin + hd.n;
             } else {
-                uint32_t split_computations = (num_computations / NR_TASKLETS) * n;
+                uint32_t split_computations = (num_computations / NR_TASKLETS) * hd.n;
                 task_begin = idx * split_computations;
                 task_end = task_begin + split_computations;
 
                 if ((idx + 1) == NR_TASKLETS) {
                     uint32_t task_extra = (num_computations % NR_TASKLETS);
-                    task_end += remaining_computations + (task_extra * n);
+                    task_end += remaining_computations + (task_extra * hd.n);
                 }
             }
         }
@@ -54,7 +54,7 @@ static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
         input.task_end[idx] = task_end;
 
         uint32_t task_samples = input.task_end[0] - input.task_begin[0];
-        input.idx_offset[idx] = (task_samples / n) * idx;
+        input.idx_offset[idx] = (task_samples / hd.n) * idx;
 
         dbg_printf("%u: idx_offset = %u\n", idx, input.idx_offset[idx]);
         dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
@@ -82,7 +82,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     /* Section of buffer for one channel, without samples not divisible by n */
     uint32_t samples = number_of_input_samples / NR_DPUS;
     /* Remove samples not divisible by n */
-    uint32_t chunk_size = samples - (samples % n);
+    uint32_t chunk_size = samples - (samples % hd.n);
     /* Extra data for last DPU */
     uint32_t extra_data = number_of_input_samples - (chunk_size * NR_DPUS);
 
@@ -97,7 +97,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     /* + n to account for + z in algorithm (unless 1 DPU) */
     uint32_t buffer_channel_usable_length = buffer_channel_length;
     if (NR_DPUS > 1) {
-        buffer_channel_usable_length += n;
+        buffer_channel_usable_length += hd.n;
     }
 
     uint32_t aligned_buffer_size = ALIGN(buffer_channel_usable_length * sizeof(int32_t), 8);
@@ -108,7 +108,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     /* First entry for each tasklet contains length */
     uint32_t output_buffer_loc[NR_DPUS];
     uint32_t output_buffer_length[NR_DPUS];
-    output_buffer_length[0] = (buffer_channel_length / n);
+    output_buffer_length[0] = (buffer_channel_length / hd.n);
 
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
@@ -122,36 +122,30 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         // Variables in WRAM
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_aligned_size", 0, &aligned_buffer_size, sizeof(aligned_buffer_size)));
         DPU_ASSERT(dpu_copy_to(dpu, "buffer_channel_usable_length", 0, &buffer_channel_usable_length, sizeof(buffer_channel_usable_length)));
-        DPU_ASSERT(dpu_copy_to(dpu, "dimension", 0, &dimension, sizeof(dimension)));
-        DPU_ASSERT(dpu_copy_to(dpu, "channels", 0, &channels, sizeof(channels)));
-        DPU_ASSERT(dpu_copy_to(dpu, "bit_dim", 0, &bit_dim, sizeof(bit_dim)));
-        DPU_ASSERT(dpu_copy_to(dpu, "n", 0, &n, sizeof(n)));
-        DPU_ASSERT(dpu_copy_to(dpu, "im_length", 0, &im_length, sizeof(im_length)));
-        DPU_ASSERT(dpu_copy_to(dpu, "dpu_id", 0, &dpu_id, sizeof(dpu_id)));
+
+        DPU_ASSERT(dpu_copy_to(dpu, "hd", 0, &hd, sizeof(hd)));
+
         DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &input, sizeof(input)));
 
         // Variables in MRAM
 
         // chAM;
-        uint32_t transfer_size = ALIGN(channels * (bit_dim + 1) * sizeof(uint32_t), 8);
+        uint32_t transfer_size = ALIGN(hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
         DPU_ASSERT(dpu_copy_to(dpu, "chAM", 0, (uint8_t *)chAM, transfer_size));
-        mram_buffers_loc += transfer_size;
 
         // iM;
-        transfer_size = ALIGN(im_length * (bit_dim + 1) * sizeof(uint32_t), 8);
+        transfer_size = ALIGN(hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
         DPU_ASSERT(dpu_copy_to(dpu, "iM", 0, (uint8_t *)iM, transfer_size));
-        mram_buffers_loc += transfer_size;
 
         // aM_32;
-        transfer_size = ALIGN(n * (bit_dim + 1) * sizeof(uint32_t), 8);
+        transfer_size = ALIGN(hd.n * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
         DPU_ASSERT(dpu_copy_to(dpu, "aM_32", 0, (uint8_t *)aM_32, transfer_size));
-        mram_buffers_loc += transfer_size;
 
         // dataset:
         DPU_ASSERT(dpu_copy_to(dpu, "input_buffer", 0, &mram_buffers_loc, sizeof(mram_buffers_loc)));
         if (buffer_channel_length > 0) {
             /* Copy each channel into DPU array */
-            for (int i = 0; i < channels; i++) {
+            for (int i = 0; i < hd.channels; i++) {
                 uint8_t * ta = (uint8_t *)(&data_set[(i * number_of_input_samples) + buff_offset]);
                 /* Check input dataset */
                 dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, aligned_buffer_size, buffer_channel_length, buffer_channel_usable_length);
@@ -178,8 +172,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
             aligned_buffer_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
             /* Output */
-            uint32_t extra_result = (buffer_channel_length % n) != 0;
-            output_buffer_length[dpu_id] = (buffer_channel_length / n) + extra_result;
+            uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
+            output_buffer_length[dpu_id] = (buffer_channel_length / hd.n) + extra_result;
         } else if (dpu_id < NR_DPUS) {
             output_buffer_length[dpu_id] = output_buffer_length[0];
         }
@@ -231,21 +225,21 @@ static int host_hdc(int32_t * data_set, int32_t *results) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
-    uint32_t q[bit_dim + 1];
-    uint32_t q_N[bit_dim + 1];
-    int32_t quantized_buffer[channels];
+    uint32_t q[hd.bit_dim + 1];
+    uint32_t q_N[hd.bit_dim + 1];
+    int32_t quantized_buffer[hd.channels];
 
     int result_num = 0;
 
-    memset(q, 0, (bit_dim + 1) * sizeof(uint32_t));
-    memset(q_N, 0, (bit_dim + 1) * sizeof(uint32_t));
-    memset(quantized_buffer, 0, channels * sizeof(uint32_t));
+    memset(q, 0, (hd.bit_dim + 1) * sizeof(uint32_t));
+    memset(q_N, 0, (hd.bit_dim + 1) * sizeof(uint32_t));
+    memset(quantized_buffer, 0, hd.channels * sizeof(uint32_t));
 
-    for(int ix = 0; ix < number_of_input_samples; ix += n) {
+    for(int ix = 0; ix < number_of_input_samples; ix += hd.n) {
 
-        for(int z = 0; z < n; z++) {
+        for(int z = 0; z < hd.n; z++) {
 
-            for(int j = 0; j < channels; j++) {
+            for(int j = 0; j < hd.channels; j++) {
                 // NOTE: Buffer overflow in original code?
                 if (ix + z < number_of_input_samples) {
                     int ind = A2D1D(number_of_input_samples, j, ix + z);
@@ -264,7 +258,7 @@ static int host_hdc(int32_t * data_set, int32_t *results) {
                 // before performing the componentwise XOR operation with the new query (q_N).
                 overflow = q[0] & mask;
 
-                for(int i = 1; i < bit_dim; i++){
+                for(int i = 1; i < hd.bit_dim; i++){
                     old_overflow = overflow;
                     overflow = q[i] & mask;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
@@ -272,9 +266,9 @@ static int host_hdc(int32_t * data_set, int32_t *results) {
                 }
 
                 old_overflow = overflow;
-                overflow = (q[bit_dim] >> 16) & mask;
-                q[bit_dim] = (q[bit_dim] >> 1) | (old_overflow << (32 - 1));
-                q[bit_dim] = q_N[bit_dim] ^ q[bit_dim];
+                overflow = (q[hd.bit_dim] >> 16) & mask;
+                q[hd.bit_dim] = (q[hd.bit_dim] >> 1) | (old_overflow << (32 - 1));
+                q[hd.bit_dim] = q_N[hd.bit_dim] ^ q[hd.bit_dim];
 
                 q[0] = (q[0] >> 1) | (overflow << (32 - 1));
                 q[0] = q_N[0] ^ q[0];
@@ -308,8 +302,8 @@ static double run_hdc(hdc fn, hdc_data *data) {
 
     int ret = 0;
 
-    uint8_t extra_result = (number_of_input_samples % n) != 0;
-    data->result_len = (number_of_input_samples / n) + extra_result;
+    uint8_t extra_result = (number_of_input_samples % hd.n) != 0;
+    data->result_len = (number_of_input_samples / hd.n) + extra_result;
     uint32_t result_size = data->result_len * sizeof(int32_t);
 
     if ((data->results = malloc(result_size)) == NULL) {
@@ -413,7 +407,7 @@ int main(int argc, char **argv) {
         return ret;
     }
 
-    uint32_t buffer_size = (sizeof(int32_t) * number_of_input_samples * channels);
+    uint32_t buffer_size = (sizeof(int32_t) * number_of_input_samples * hd.channels);
     int32_t *data_set = malloc(buffer_size);
     if (data_set == NULL) {
         nomem();
