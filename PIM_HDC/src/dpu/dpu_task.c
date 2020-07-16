@@ -150,7 +150,7 @@ int main() {
 
     barrier_wait(&finish_barrier);
 
-    mram_write(output, output_buffer, out_size);
+    (void) memcpy(read_buf, output, out_size);
 
     perfcounter_t total_cycles = perfcounter_get();
     printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);

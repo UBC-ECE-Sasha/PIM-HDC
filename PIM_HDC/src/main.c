@@ -23,6 +23,18 @@
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
+typedef struct dpu_runtime {
+    double execution_time_copy_in;
+    double execution_time_launch;
+    double execution_time_copy_out;
+} dpu_runtime;
+
+static double time_difference(struct timeval * start, struct timeval * end) {
+    double start_time = start->tv_sec + start->tv_usec / 1000000.0;
+    double end_time = end->tv_sec + end->tv_usec / 1000000.0;
+    return (end_time - start_time);
+}
+
 static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
     /* Computations must be n divisible unless extra at end */
     int32_t num_computations = buffer_channel_length / hd.n;
@@ -69,10 +81,15 @@ static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
  * @param[in] data_set Quantized data buffer
  * @return             Non-zero on failure.
  */
-static int prepare_dpu(int32_t * data_set, int32_t *results) {
+static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
 
     struct dpu_set_t dpus;
     struct dpu_set_t dpu;
+
+    struct timeval start;
+    struct timeval end;
+
+    dpu_runtime *rt = runtime;
 
     uint32_t dpu_id = 0;
 
@@ -86,14 +103,25 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     uint32_t chunk_size = samples - (samples % hd.n);
     /* Extra data for last DPU */
     uint32_t extra_data = number_of_input_samples - (chunk_size * NR_DPUS);
+    uint32_t extra_data_divisible = extra_data / hd.n;
 
-    dbg_printf("chunk_size = %d / %d = %d\n", number_of_input_samples, NR_DPUS, chunk_size);
-    if (chunk_size > SAMPLE_SIZE_MAX) {
-        fprintf(stderr, "chunk_size per dpu (%u) cannot be greater than SAMPLE_SIZE_MAX = (%d)\n",
-                chunk_size, SAMPLE_SIZE_MAX);
+    uint32_t buffer_channel_lengths[NR_DPUS];
+    for (int i = 0; i < NR_DPUS; i++) {
+        buffer_channel_lengths[i] = chunk_size;
     }
 
-    uint32_t buffer_channel_length = chunk_size;
+    int i = 0;
+    while (extra_data_divisible != 0) {
+        buffer_channel_lengths[i] += hd.n;
+        extra_data_divisible--;
+        i++;
+        if (i == NR_DPUS) {
+            i = 0;
+        }
+    }
+    buffer_channel_lengths[NR_DPUS - 1] += extra_data % hd.n;
+
+    uint32_t buffer_channel_length = buffer_channel_lengths[0];
 
     /* + n to account for + z in algorithm (unless 1 DPU) */
     uint32_t buffer_channel_usable_length = buffer_channel_length;
@@ -114,9 +142,13 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
 
+    gettimeofday(&start, NULL);
+
+    DPU_ASSERT(dpu_load(dpus, DPU_PROGRAM, NULL));
+
     DPU_FOREACH(dpus, dpu) {
         dbg_printf("DPU %d\n", dpu_id);
-        DPU_ASSERT(dpu_load(dpu, DPU_PROGRAM, NULL));
+        dbg_printf("buffer_channel_length = %u\n", buffer_channel_length);
 
         dpu_input_data input = setup_dpu_data(buffer_channel_length);
         input.buffer_channel_aligned_size = buffer_channel_aligned_size;
@@ -171,39 +203,53 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
         buff_offset += buffer_channel_length;
         dpu_id++;
 
-        /* Modified only for last DPU in case uneven */
-        if ((dpu_id == (NR_DPUS - 1)) && (NR_DPUS > 1) && (extra_data != 0)) {
-            /* Input */
-            buffer_channel_length = buffer_channel_length + extra_data;
-            buffer_channel_usable_length = buffer_channel_length; /* No n on last in algorithm */
-            buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
-
-            /* Output */
-            uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
-            output_buffer_length[dpu_id] = (buffer_channel_length / hd.n) + extra_result;
-        } else if (dpu_id < NR_DPUS) {
-            output_buffer_length[dpu_id] = output_buffer_length[0];
+        /* Input */
+        buffer_channel_length = buffer_channel_lengths[dpu_id];
+        if (dpu_id == NR_DPUS - 1) {
+            /* No n on last in algorithm */
+            buffer_channel_usable_length = buffer_channel_length;
+        } else {
+            buffer_channel_usable_length = buffer_channel_length + hd.n;
         }
+        buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
+
+        if ((buffer_channel_usable_length * hd.channels) > SAMPLE_SIZE_MAX) {
+            fprintf(stderr, "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT = (%d)\n",
+                    buffer_channel_usable_length * hd.channels, SAMPLE_SIZE_MAX);
+        }
+
+        /* Output */
+        uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
+        output_buffer_length[dpu_id] = (buffer_channel_length / hd.n) + extra_result;
     }
 
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_copy_in = time_difference(&start, &end);
+
+    gettimeofday(&start, NULL);
     int ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_launch = time_difference(&start, &end);
 
     dpu_id = 0;
-    uint32_t * output_buffer[NR_DPUS];
-    DPU_FOREACH(dpus, dpu) {
-        uint32_t out_len = ALIGN(sizeof(int32_t) * output_buffer_length[dpu_id], 8);
-        output_buffer[dpu_id] = malloc(out_len);
-        if (output_buffer[dpu_id] == NULL) {
-            nomem();
-        }
 
-        DPU_ASSERT(dpu_copy_from_mram(dpu.dpu, (uint8_t *)output_buffer[dpu_id], output_buffer_start, out_len));
+    gettimeofday(&start, NULL);
+    uint32_t output_buffer[NR_DPUS][MAX_INPUT];
+    DPU_FOREACH(dpus, dpu) {
+        uint32_t size_xfer = output_buffer_length[dpu_id] * sizeof(int32_t);
+        DPU_ASSERT(dpu_copy_from(dpu, "read_buf", 0, output_buffer[dpu_id], size_xfer));
 
         printf("------DPU %d Logs------\n", dpu_id);
         DPU_ASSERT(dpu_log_read(dpu, stdout));
 
         dpu_id++;
     }
+
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_copy_out = time_difference(&start, &end);
 
     uint32_t result_num = 0;
     for (dpu_id = 0; dpu_id < NR_DPUS; dpu_id++) {
@@ -228,7 +274,10 @@ static int prepare_dpu(int32_t * data_set, int32_t *results) {
  * @param[in] data_set Quantized data buffer
  * @return             Non-zero on failure.
  */
-static int host_hdc(int32_t * data_set, int32_t *results) {
+static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
+
+    (void) runtime;
+
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
     uint32_t mask = 1;
@@ -288,12 +337,6 @@ static int host_hdc(int32_t * data_set, int32_t *results) {
     return 0;
 }
 
-static double time_difference(struct timeval * start, struct timeval * end) {
-    double start_time = start->tv_sec + start->tv_usec / 1000000.0;
-    double end_time = end->tv_sec + end->tv_usec / 1000000.0;
-    return (end_time - start_time);
-}
-
 typedef struct hdc_data {
     int32_t *data_set;
     int32_t *results;
@@ -301,9 +344,9 @@ typedef struct hdc_data {
     double execution_time;
 } hdc_data;
 
-typedef int (*hdc)(int32_t * data_set, int32_t *results);
+typedef int (*hdc)(int32_t * data_set, int32_t *results, void *runtime);
 
-static double run_hdc(hdc fn, hdc_data *data) {
+static double run_hdc(hdc fn, hdc_data *data, void *runtime) {
     struct timeval start;
     struct timeval end;
 
@@ -318,7 +361,7 @@ static double run_hdc(hdc fn, hdc_data *data) {
     }
 
     gettimeofday(&start, NULL);
-    ret = fn(data->data_set, data->results);
+    ret = fn(data->data_set, data->results, runtime);
     gettimeofday(&end, NULL);
 
     data->execution_time = time_difference(&start, &end);
@@ -330,6 +373,7 @@ static int compare_results(hdc_data *dpu_data, hdc_data *host_data) {
     int ret = 0;
 
     printf("--- Compare --\n");
+    printf("(%u) results\n", host_data->result_len);
     for (uint32_t i = 0; i < host_data->result_len; i++) {
         if (host_data->results[i] != dpu_data->results[i]) {
             fprintf(stderr, "(host_results[%u] = %d) != (dpu_results[%u] = %d)\n",
@@ -425,12 +469,14 @@ int main(int argc, char **argv) {
     hdc_data dpu_results = { .data_set = data_set };
     hdc_data host_results = { .data_set = data_set };
 
+    dpu_runtime runtime;
+
     if (use_dpu || test_results) {
-        dpu_ret = run_hdc(prepare_dpu, &dpu_results);
+        dpu_ret = run_hdc(prepare_dpu, &dpu_results, &runtime);
     }
 
     if (!use_dpu || test_results) {
-        host_ret = run_hdc(host_hdc, &host_results);
+        host_ret = run_hdc(host_hdc, &host_results, NULL);
     }
 
     if (use_dpu || test_results) {
@@ -439,6 +485,9 @@ int main(int argc, char **argv) {
             print_results(&dpu_results);
         }
         printf("DPU took %fs\n", dpu_results.execution_time);
+        printf("DPU execution_time_copy_in %fs\n", runtime.execution_time_copy_in);
+        printf("DPU execution_time_launch %fs\n", runtime.execution_time_launch);
+        printf("DPU execution_time_copy_out %fs\n", runtime.execution_time_copy_out);
     }
 
     if (!use_dpu || test_results) {
