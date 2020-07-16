@@ -25,9 +25,6 @@
 BARRIER_INIT(start_barrier, NR_TASKLETS);
 BARRIER_INIT(finish_barrier, NR_TASKLETS);
 
-// MRAM
-__host __mram_ptr uint8_t *output_buffer;
-
 // WRAM
 __host uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 __host uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
