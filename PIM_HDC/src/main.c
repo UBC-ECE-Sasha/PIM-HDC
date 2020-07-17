@@ -35,12 +35,10 @@ static double time_difference(struct timeval * start, struct timeval * end) {
     return (end_time - start_time);
 }
 
-static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
+static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, uint32_t dpu_id) {
     /* Computations must be n divisible unless extra at end */
     int32_t num_computations = buffer_channel_length / hd.n;
     int32_t remaining_computations = buffer_channel_length % hd.n;
-
-    dpu_input_data input;
 
     for (uint8_t idx = 0; idx < NR_TASKLETS; idx++) {
         uint32_t task_begin = 0;
@@ -62,17 +60,38 @@ static dpu_input_data setup_dpu_data(uint32_t buffer_channel_length) {
             }
         }
 
-        input.task_begin[idx] = task_begin;
-        input.task_end[idx] = task_end;
+        input->task_begin[idx] = task_begin;
+        input->task_end[idx] = task_end;
 
-        uint32_t task_samples = input.task_end[0] - input.task_begin[0];
-        input.idx_offset[idx] = (task_samples / hd.n) * idx;
+        uint32_t task_samples = input->task_end[0] - input->task_begin[0];
+        input->idx_offset[idx] = (task_samples / hd.n) * idx;
 
-        dbg_printf("%u: idx_offset = %u\n", idx, input.idx_offset[idx]);
+        dbg_printf("%u: idx_offset = %u\n", idx, input->idx_offset[idx]);
         dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
     }
 
-    return input;
+    /* Input */
+    if (dpu_id == NR_DPUS - 1) {
+        /* No n on last in algorithm */
+        input->buffer_channel_usable_length = buffer_channel_length;
+    } else {
+        input->buffer_channel_usable_length = buffer_channel_length + hd.n;
+    }
+    input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
+
+    if ((input->buffer_channel_usable_length * hd.channels) > SAMPLE_SIZE_MAX) {
+        fprintf(stderr, "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT = (%d)\n",
+                input->buffer_channel_usable_length * hd.channels, SAMPLE_SIZE_MAX);
+        return -1;
+    }
+
+    /* Output */
+    uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
+    input->output_buffer_length = (buffer_channel_length / hd.n) + extra_result;
+
+    input->buffer_channel_length = buffer_channel_length;
+
+    return 0;
 }
 
 /**
@@ -85,13 +104,14 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
 
     struct dpu_set_t dpus;
     struct dpu_set_t dpu;
+    struct dpu_set_t dpu_rank;
+
+    int ret = 0;
 
     struct timeval start;
     struct timeval end;
 
     dpu_runtime *rt = runtime;
-
-    uint32_t dpu_id = 0;
 
     /* Section of buffer for one channel, without samples not divisible by n */
     uint32_t samples = number_of_input_samples / NR_DPUS;
@@ -128,90 +148,93 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
     uint32_t buffer_channel_aligned_size = ALIGN(buffer_channel_usable_length * sizeof(int32_t), 8);
     uint32_t buff_offset = 0;
 
-    /* output */
-
-    /* First entry for each tasklet contains length */
-    uint32_t output_buffer_loc[NR_DPUS];
-    uint32_t output_buffer_length[NR_DPUS];
-    output_buffer_length[0] = (buffer_channel_length / hd.n);
+    // chAM;
+    uint32_t transfer_size_chAM = ALIGN(hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
+    // iM;
+    uint32_t transfer_size_iM = ALIGN(hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
+    // aM_32;
+    uint32_t transfer_size_aM_32 = ALIGN(hd.n * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
 
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
 
-    gettimeofday(&start, NULL);
-
     DPU_ASSERT(dpu_load(dpus, DPU_PROGRAM, NULL));
 
-    DPU_FOREACH(dpus, dpu) {
-        dbg_printf("DPU %d\n", dpu_id);
-        dbg_printf("buffer_channel_length = %u\n", buffer_channel_length);
+    gettimeofday(&start, NULL);
 
-        dpu_input_data input = setup_dpu_data(buffer_channel_length);
-        input.buffer_channel_aligned_size = buffer_channel_aligned_size;
-        input.buffer_channel_usable_length = buffer_channel_usable_length;
-        input.output_buffer_length = output_buffer_length[dpu_id];
+    dpu_input_data inputs[NR_DPUS];
 
-        // Variables in WRAM
-        DPU_ASSERT(dpu_copy_to(dpu, "hd", 0, &hd, sizeof(hd)));
-        DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &input, sizeof(input)));
+    uint32_t dpu_id = 0;
+    uint32_t dpu_id_rank = 0;
 
-        // chAM;
-        uint32_t transfer_size = ALIGN(hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "chAM", 0, (uint8_t *)chAM, transfer_size));
-
-        // iM;
-        transfer_size = ALIGN(hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "iM", 0, (uint8_t *)iM, transfer_size));
-
-        // aM_32;
-        transfer_size = ALIGN(hd.n * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
-        DPU_ASSERT(dpu_copy_to(dpu, "aM_32", 0, (uint8_t *)aM_32, transfer_size));
-
-        // INPUT
-        size_t total_xfer = 0;
-        if (buffer_channel_length > 0) {
-            /* Copy each channel into DPU array */
-            for (int i = 0; i < hd.channels; i++) {
-                int32_t * ta = &data_set[(i * number_of_input_samples) + buff_offset];
-                dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, buffer_channel_aligned_size, buffer_channel_length, buffer_channel_usable_length);
-                size_t sz_xfer = buffer_channel_usable_length * sizeof(int32_t);
-                DPU_ASSERT(dpu_copy_to(dpu, "read_buf", i * sz_xfer, ta, ALIGN(sz_xfer, 8)));
-                total_xfer += sz_xfer;
-            }
-        }
-
-        if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
-            fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t), MAX_INPUT);
-            return -1;
-        }
-
-        // Output
-        dbg_printf("OUTPUT output_buffer_length (%u):\n", output_buffer_length[dpu_id]);
-
-        buff_offset += buffer_channel_length;
-
-        dpu_id++;
-
-        if (dpu_id < NR_DPUS) {
-            /* Input */
-            buffer_channel_length = buffer_channel_lengths[dpu_id];
-            if (dpu_id == NR_DPUS - 1) {
-                /* No n on last in algorithm */
-                buffer_channel_usable_length = buffer_channel_length;
-            } else {
-                buffer_channel_usable_length = buffer_channel_length + hd.n;
-            }
-            buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
-
-            if ((buffer_channel_usable_length * hd.channels) > SAMPLE_SIZE_MAX) {
-                fprintf(stderr, "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT = (%d)\n",
-                        buffer_channel_usable_length * hd.channels, SAMPLE_SIZE_MAX);
+    DPU_RANK_FOREACH(dpus, dpu_rank) {
+        dpu_id = dpu_id_rank;
+        DPU_FOREACH(dpu_rank, dpu) {
+            ret = setup_dpu_data(&inputs[dpu_id], buffer_channel_lengths[dpu_id], dpu_id);
+            if (ret != 0) {
+                return ret;
             }
 
-            /* Output */
-            uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
-            output_buffer_length[dpu_id] = (buffer_channel_length / hd.n) + extra_result;
+            dbg_printf("%u: buffer_channel_length = %u\n", dpu_id, inputs[dpu_id].buffer_channel_length);
+
+            DPU_ASSERT(dpu_prepare_xfer(dpu, &hd));
+
+            dpu_id++;
         }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "hd", 0, sizeof(hd), DPU_XFER_DEFAULT));
+
+        dpu_id = dpu_id_rank;
+
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, &inputs[dpu_id++]));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]), DPU_XFER_DEFAULT));
+
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, chAM));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "chAM", 0, transfer_size_chAM, DPU_XFER_DEFAULT));
+
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "iM", 0, transfer_size_iM, DPU_XFER_DEFAULT));
+
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, aM_32));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "aM_32", 0, transfer_size_aM_32, DPU_XFER_DEFAULT));
+
+        dpu_id = dpu_id_rank;
+
+        DPU_FOREACH(dpu_rank, dpu) {
+            // INPUT
+            size_t total_xfer = 0;
+            if (inputs[dpu_id].buffer_channel_length > 0) {
+                /* Copy each channel into DPU array */
+                for (int i = 0; i < hd.channels; i++) {
+                    int32_t * ta = &data_set[(i * number_of_input_samples) + buff_offset];
+                    dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, inputs[dpu_id].buffer_channel_aligned_size, buffer_channel_length, buffer_channel_usable_length);
+                    size_t sz_xfer = inputs[dpu_id].buffer_channel_usable_length * sizeof(int32_t);
+                    DPU_ASSERT(dpu_copy_to(dpu, "read_buf", i * sz_xfer, ta, ALIGN(sz_xfer, 8)));
+                    total_xfer += sz_xfer;
+                }
+            }
+
+            if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
+                fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t), MAX_INPUT);
+                return -1;
+            }
+
+            // Output
+            dbg_printf("OUTPUT output_buffer_length (%u):\n", inputs[dpu_id].output_buffer_length);
+
+            buff_offset += inputs[dpu_id].buffer_channel_length;
+
+            dpu_id++;
+        }
+
+        dpu_id_rank = dpu_id;
     }
 
     gettimeofday(&end, NULL);
@@ -220,23 +243,35 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
 
     gettimeofday(&start, NULL);
     dbg_printf("Launching\n");
-    int ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
+    ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
     gettimeofday(&end, NULL);
 
     rt->execution_time_launch = time_difference(&start, &end);
 
-    dpu_id = 0;
-
     gettimeofday(&start, NULL);
     uint32_t output_buffer[NR_DPUS][MAX_INPUT];
-    DPU_FOREACH(dpus, dpu) {
-        printf("------DPU %d Logs------\n", dpu_id);
-        DPU_ASSERT(dpu_log_read(dpu, stdout));
+    dpu_id_rank = dpu_id = 0;
 
-        uint32_t size_xfer = output_buffer_length[dpu_id] * sizeof(int32_t);
-        DPU_ASSERT(dpu_copy_from(dpu, "read_buf", 0, output_buffer[dpu_id], size_xfer));
+    DPU_RANK_FOREACH(dpus, dpu_rank) {
+        dpu_id = dpu_id_rank;
 
-        dpu_id++;
+        uint32_t largest_size_xfer = 0;
+        DPU_FOREACH(dpu_rank, dpu) {
+            printf("------DPU %d Logs------\n", dpu_id);
+            DPU_ASSERT(dpu_log_read(dpu, stdout));
+
+            uint32_t size_xfer = inputs[dpu_id].output_buffer_length * sizeof(int32_t);
+            if (size_xfer > largest_size_xfer) {
+                largest_size_xfer = size_xfer;
+            }
+            DPU_ASSERT(dpu_prepare_xfer(dpu, output_buffer[dpu_id]));
+
+            dpu_id++;
+        }
+
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer, DPU_XFER_DEFAULT));
+
+        dpu_id_rank = dpu_id;
     }
 
     gettimeofday(&end, NULL);
@@ -245,7 +280,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
 
     uint32_t result_num = 0;
     for (dpu_id = 0; dpu_id < NR_DPUS; dpu_id++) {
-        for (uint32_t j = 0; j < output_buffer_length[dpu_id]; j++) {
+        for (uint32_t j = 0; j < inputs[dpu_id].output_buffer_length; j++) {
             results[result_num++] = output_buffer[dpu_id][j];
         }
     }
