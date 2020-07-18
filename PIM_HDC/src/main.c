@@ -384,9 +384,21 @@ static int compare_results(hdc_data *dpu_data, hdc_data *host_data) {
             ret = 1;
         }
     }
-    double time_diff = dpu_data->execution_time - host_data->execution_time;
-    double percent_diff = dpu_data->execution_time / host_data->execution_time;
-    printf("Host was %fs (%f x) faster than dpu\n", time_diff, percent_diff);
+
+    char *faster;
+    double time_diff, percent_diff;
+    if (dpu_data->execution_time > host_data->execution_time) {
+        faster = "Host";
+        time_diff = dpu_data->execution_time - host_data->execution_time;
+        percent_diff = dpu_data->execution_time / host_data->execution_time;
+    } else {
+        faster = "DPU";
+        time_diff = host_data->execution_time - dpu_data->execution_time;
+        percent_diff = host_data->execution_time / dpu_data->execution_time;
+    }
+
+
+    printf("%s was %fs (%f x) faster\n", faster, time_diff, percent_diff);
 
     return ret;
 }
