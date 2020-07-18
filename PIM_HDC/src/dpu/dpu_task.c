@@ -44,9 +44,19 @@ perfcounter_t bit_mod_cycles = 0;
 // uint32_t aM_32[N][BIT_DIM + 1];
 
 /**
- * @brief Run HDC algorithm on host
+ * @brief Run HDC algorithm
  *
  * @return Non-zero on failure.
+ */
+
+/**
+ * @brief Run HDC algorithm
+ * @param[out] result         Buffer to place results in
+ * @param[out] result_offset  Offset to start placing results from
+ * @param[in] task_begin      Position to start task from
+ * @param[in] task_end        Position to end task at
+ *
+ * @return                    Non-zero on failure.
  */
 static int
 dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end) {

@@ -14,20 +14,52 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-// Original array lengths
-// double TEST_SET[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
-// uint32_t chAM[CHANNELS][BIT_DIM + 1];
-// uint32_t iM[IM_LENGTH][BIT_DIM + 1];
-// uint32_t aM_32[N][BIT_DIM + 1];
-
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
 
+/**
+ * @struct dpu_runtime
+ * @brief DPU execution times
+ */
 typedef struct dpu_runtime {
     double execution_time_copy_in;
     double execution_time_launch;
     double execution_time_copy_out;
 } dpu_runtime;
 
+/**
+ * @struct hdc_data
+ * @brief HDC data for HDC task
+ */
+typedef struct hdc_data {
+    int32_t *data_set;     /**< Input HDC dataset */
+    int32_t *results;      /**< Output from run */
+    uint32_t result_len;   /**< Length of the results */
+    double execution_time; /**< Total execution time of run */
+} hdc_data;
+
+
+/**
+ * @struct in_buffer
+ *
+ * @brief   Input buffer for a DPU
+ */
+typedef struct in_buffer {
+    int32_t buffer[MAX_INPUT];
+    size_t buffer_size;
+} in_buffer;
+
+/**
+ * @brief Function for @p run_hdc to run HDC task
+ */
+typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
+
+/**
+ * @brief Calculate the difference between @p start and @p end
+ * @param[in] start  Start time of task
+ * @param[in] end    End time of task
+ *
+ * @return           Time difference between start and end (seconds)
+ */
 static double
 time_difference(struct timeval *start, struct timeval *end) {
     double start_time = start->tv_sec + start->tv_usec / 1000000.0;
@@ -35,6 +67,17 @@ time_difference(struct timeval *start, struct timeval *end) {
     return (end_time - start_time);
 }
 
+/**
+ * @brief Set up the data for each DPU
+ * @param[out]    input                  Datastructure to be populated for DPU
+ * @param[in]     buffer_channel_length  Length of an individual channel
+ * @param[in]     data_in                Data buffer for DPU
+ * @param[in]     data_set               Input data for populating @p data_in
+ * @param[in,out] buff_offset            Current offset in @p dataset
+ * @param[in]     dpu_id                 ID of DPU
+ *
+ * @return                               Non-zero on failure
+ */
 static int
 setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in,
                int32_t *data_set, uint32_t *buff_offset, uint32_t dpu_id) {
@@ -123,6 +166,10 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     return 0;
 }
 
+/**
+ * @brief Calculate individual buffer lengths for each DPU with as even distribution as possible
+ * @param[out] buffer_channel_lengths  Lengths for each DPU's channel
+ */
 static void
 calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
     /* Section of buffer for one channel, without samples not divisible by n */
@@ -152,8 +199,11 @@ calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
 /**
  * @brief Prepare the DPU context and upload the program to the DPU.
  *
- * @param[in] data_set Quantized data buffer
- * @return             Non-zero on failure.
+ * @param[in]  data_set  Input dataset
+ * @param[out] results   Results from run
+ * @param[out] runtime   Runtimes of individual sections
+ *
+ * @return               Non-zero on failure.
  */
 static int
 prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
@@ -286,10 +336,13 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 }
 
 /**
- * @brief Prepare the DPU context and upload the program to the DPU.
+ * @brief Run the HDC algorithm for the host
  *
- * @param[in] data_set Quantized data buffer
- * @return             Non-zero on failure.
+ * @param[in]  data_set  Input dataset
+ * @param[out] results   Results from run
+ * @param[out] runtime   Runtimes of individual sections (unused)
+ *
+ * @return               Non-zero on failure.
  */
 static int
 host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
@@ -355,15 +408,15 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
     return 0;
 }
 
-typedef struct hdc_data {
-    int32_t *data_set;
-    int32_t *results;
-    uint32_t result_len;
-    double execution_time;
-} hdc_data;
-
-typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
-
+/**
+ * @brief Run a HDC workload and time the execution
+ *
+ * @param[in] fn        Function to run HDC algorithm
+ * @param[out] data     Results from HDC run
+ * @param[out] runtime  Run times from sections of @p fn
+ *
+ * @return Non-zero On failure
+ */
 static double
 run_hdc(hdc fn, hdc_data *data, void *runtime) {
     struct timeval start;
@@ -388,6 +441,15 @@ run_hdc(hdc fn, hdc_data *data, void *runtime) {
     return ret;
 }
 
+/**
+ * @brief Compare the results from the host and DPU confirming they are the same
+ *        or printing differences
+ *
+ * @param[in] dpu_data   Results to be tested from DPU
+ * @param[in] host_data  Results to be tested from host
+ *
+ * @return               Non-zero if results are not the same
+ */
 static int
 compare_results(hdc_data *dpu_data, hdc_data *host_data) {
     int ret = 0;
@@ -419,6 +481,10 @@ compare_results(hdc_data *dpu_data, hdc_data *host_data) {
     return ret;
 }
 
+/**
+ * @brief Print results from HDC run
+ * @param[in] data  Results to print
+ */
 static void
 print_results(hdc_data *data) {
     for (uint32_t i = 0; i < data->result_len; i++) {
@@ -426,6 +492,11 @@ print_results(hdc_data *data) {
     }
 }
 
+/**
+ * @brief Display usage information to @p stream
+ * @param[in] stream    File pointer to write usage to
+ * @param[in] exe_name  Name of executable
+ */
 static void
 usage(FILE *stream, char const *exe_name) {
 #ifdef DEBUG

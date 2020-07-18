@@ -16,7 +16,7 @@ The following is a high-level description of the hyperdimensional accelerator.
 
      IM represents discrete signals.
 
-   * A continuos item memory (CIM) extends the notion of item memory to analog values (e.g., the signal levels of channels) for mapping.
+   * A continuous item memory (CIM) extends the notion of item memory to analog values (e.g., the signal levels of channels) for mapping.
 
      CIM is defined in `data.h` as `uint32_t chM[CHANNELS][BIT_DIM + 1]`. It is pre-computed.
 
