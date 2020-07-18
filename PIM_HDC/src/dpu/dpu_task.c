@@ -26,13 +26,10 @@ BARRIER_INIT(start_barrier, NR_TASKLETS);
 BARRIER_INIT(finish_barrier, NR_TASKLETS);
 
 // WRAM
-__host uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
-__host uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
-__host uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];
 __host dpu_input_data dpu_data;
 __host dpu_hdc_vars hd;
 
-__host int32_t read_buf[ALIGN(MAX_INPUT, 8)];
+__host int32_t read_buf[MAX_INPUT];
 __dma_aligned int32_t *output;
 
 perfcounter_t counter = 0;
@@ -77,11 +74,11 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
                 CYCLES_COUNT_START(&counter);
-                compute_N_gram(quantized_buffer, iM, chAM, q);
+                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q);
                 CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
             } else {
                 CYCLES_COUNT_START(&counter);
-                compute_N_gram(quantized_buffer, iM, chAM, q_N);
+                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q_N);
                 CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
 
                 CYCLES_COUNT_START(&counter);
@@ -109,7 +106,7 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
 
         CYCLES_COUNT_START(&counter);
         // Classifies the new N-gram through the Associative Memory matrix.
-        result[result_offset + result_num] = associative_memory_32bit(q, aM_32);
+        result[result_offset + result_num] = associative_memory_32bit(q, hd.aM_32);
         CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
 
         dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num, result[result_offset + result_num]);
@@ -147,7 +144,9 @@ int main() {
 
     barrier_wait(&finish_barrier);
 
-    (void) memcpy(read_buf, output, out_size);
+    if (idx == TASKLET_SETUP) {
+        (void) memcpy(read_buf, output, out_size);
+    }
 
     perfcounter_t total_cycles = perfcounter_get();
     printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);

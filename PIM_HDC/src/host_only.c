@@ -8,10 +8,6 @@
 dpu_hdc_vars hd;
 int32_t number_of_input_samples;
 
-uint32_t *chAM;
-uint32_t *iM;
-uint32_t *aM_32;
-
 /**
  * @brief Exit if NOMEM
  */
@@ -62,31 +58,17 @@ int read_data(char const * input_file, double **test_set) {
     }
 
     sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
-    chAM = malloc(sz);
-    if (chAM == NULL) {
-        nomem();
-    }
-    if (fread(chAM, 1, sz, file) != sz) {
+    if (fread(hd.chAM, 1, sz, file) != sz) {
         return ferror(file);
     }
 
     sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
-    iM = malloc(sz);
-    if (iM == NULL) {
-        nomem();
-    }
-
-    if (fread(iM, 1, sz, file) != sz) {
+    if (fread(hd.iM, 1, sz, file) != sz) {
         return ferror(file);
     }
 
     sz = hd.n * (hd.bit_dim + 1) * sizeof(uint32_t);
-    aM_32 = malloc(sz);
-    if (aM_32 == NULL) {
-        nomem();
-    }
-
-    if (fread(aM_32, 1, sz, file) != sz) {
+    if (fread(hd.aM_32, 1, sz, file) != sz) {
         return ferror(file);
     }
 

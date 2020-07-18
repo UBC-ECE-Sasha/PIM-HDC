@@ -35,7 +35,7 @@ static double time_difference(struct timeval * start, struct timeval * end) {
     return (end_time - start_time);
 }
 
-static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, uint32_t dpu_id) {
+static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in, int32_t * data_set, uint32_t *buff_offset, uint32_t dpu_id) {
     /* Computations must be n divisible unless extra at end */
     int32_t num_computations = buffer_channel_length / hd.n;
     int32_t remaining_computations = buffer_channel_length % hd.n;
@@ -94,6 +94,25 @@ static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length,
 
     input->buffer_channel_length = buffer_channel_length;
 
+    size_t sz_xfer = input->buffer_channel_usable_length * sizeof(int32_t);
+    data_in->buffer_size = sz_xfer * hd.channels;
+    if (input->buffer_channel_length > 0) {
+        /* Copy each channel into DPU array */
+        for (int i = 0; i < hd.channels; i++) {
+            int32_t * ta = &data_set[(i * number_of_input_samples) + *buff_offset];
+            dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, input->buffer_channel_aligned_size, input->buffer_channel_length, input->buffer_channel_usable_length);
+            (void) memcpy(&data_in->buffer[i * input->buffer_channel_usable_length], ta, sz_xfer);
+        }
+    }
+
+    *buff_offset += input->buffer_channel_length;
+
+    size_t total_xfer = 0;
+    if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
+        fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t), MAX_INPUT);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -139,13 +158,10 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
     uint32_t buff_offset = 0;
 
     dpu_input_data inputs[NR_DPUS];
+    in_buffer read_bufs[NR_DPUS];
 
     uint32_t dpu_id = 0;
     uint32_t dpu_id_rank = 0;
-
-    uint32_t transfer_size_chAM = ALIGN(hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
-    uint32_t transfer_size_iM = ALIGN(hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
-    uint32_t transfer_size_aM_32 = ALIGN(hd.n * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
 
     uint32_t buffer_channel_lengths[NR_DPUS];
     calculate_buffer_lengths(buffer_channel_lengths);
@@ -161,7 +177,7 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
     DPU_RANK_FOREACH(dpus, dpu_rank) {
         dpu_id = dpu_id_rank;
         DPU_FOREACH(dpu_rank, dpu) {
-            ret = setup_dpu_data(&inputs[dpu_id], buffer_channel_lengths[dpu_id], dpu_id);
+            ret = setup_dpu_data(&inputs[dpu_id], buffer_channel_lengths[dpu_id], &read_bufs[dpu_id], data_set, &buff_offset, dpu_id);
             if (ret != 0) {
                 return ret;
             }
@@ -181,48 +197,18 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
         }
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]), DPU_XFER_DEFAULT));
 
-        DPU_FOREACH(dpu_rank, dpu) {
-            DPU_ASSERT(dpu_prepare_xfer(dpu, chAM));
-        }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "chAM", 0, transfer_size_chAM, DPU_XFER_DEFAULT));
-
-        DPU_FOREACH(dpu_rank, dpu) {
-            DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
-        }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "iM", 0, transfer_size_iM, DPU_XFER_DEFAULT));
-
-        DPU_FOREACH(dpu_rank, dpu) {
-            DPU_ASSERT(dpu_prepare_xfer(dpu, aM_32));
-        }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "aM_32", 0, transfer_size_aM_32, DPU_XFER_DEFAULT));
-
         dpu_id = dpu_id_rank;
 
+        // Slightly faster than individual copy in without prepare
+        size_t largest = 0;
         DPU_FOREACH(dpu_rank, dpu) {
-            // INPUT
-            size_t total_xfer = 0;
-            if (inputs[dpu_id].buffer_channel_length > 0) {
-                /* Copy each channel into DPU array */
-                for (int i = 0; i < hd.channels; i++) {
-                    int32_t * ta = &data_set[(i * number_of_input_samples) + buff_offset];
-                    dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, inputs[dpu_id].buffer_channel_aligned_size, inputs[dpu_id].buffer_channel_length, inputs[dpu_id].buffer_channel_usable_length);
-                    size_t sz_xfer = inputs[dpu_id].buffer_channel_usable_length * sizeof(int32_t);
-                    DPU_ASSERT(dpu_copy_to(dpu, "read_buf", i * sz_xfer, ta, ALIGN(sz_xfer, 8)));
-                    total_xfer += sz_xfer;
-                }
+            DPU_ASSERT(dpu_prepare_xfer(dpu, read_bufs[dpu_id].buffer));
+            if (read_bufs[dpu_id].buffer_size > largest) {
+                largest = read_bufs[dpu_id].buffer_size;
             }
-
-            if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
-                fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t), MAX_INPUT);
-                return -1;
-            }
-
-            dbg_printf("OUTPUT output_buffer_length (%u):\n", inputs[dpu_id].output_buffer_length);
-
-            buff_offset += inputs[dpu_id].buffer_channel_length;
-
             dpu_id++;
         }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "read_buf", 0, largest, DPU_XFER_DEFAULT));
 
         dpu_id_rank = dpu_id;
     }
@@ -323,9 +309,9 @@ static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
             // Spatial and Temporal Encoder: computes the n-gram.
             // N.B. if n = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                compute_N_gram(quantized_buffer, iM, chAM, q);
+                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q);
             } else {
-                compute_N_gram(quantized_buffer, iM, chAM, q_N);
+                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q_N);
 
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
@@ -348,7 +334,7 @@ static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
             }
         }
         // classifies the new N-gram through the Associative Memory matrix.
-        results[result_num++] = associative_memory_32bit(q, aM_32);
+        results[result_num++] = associative_memory_32bit(q, hd.aM_32);
     }
 
     return 0;
@@ -523,9 +509,6 @@ int main(int argc, char **argv) {
     free(test_set);
     free(host_results.results);
     free(dpu_results.results);
-    free(chAM);
-    free(aM_32);
-    free(iM);
 
     return (ret + dpu_ret + host_ret);
 }

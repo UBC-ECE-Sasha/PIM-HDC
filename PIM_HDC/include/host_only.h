@@ -2,13 +2,10 @@
 #define HOST_ONLY_H_
 
 #include "init.h"
+#include <uchar.h>
 
 // Number of samples in each channel's dataset
 extern int32_t number_of_input_samples;
-
-extern uint32_t *chAM;
-extern uint32_t *iM;
-extern uint32_t *aM_32;
 
 // double TEST_SET[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
 // uint32_t chAM[CHANNELS][BIT_DIM + 1];
@@ -18,8 +15,8 @@ extern uint32_t *aM_32;
 extern dpu_hdc_vars hd;
 
 typedef struct in_buffer {
-    int32_t * buffer;
-    uint32_t buffer_size;
+    int32_t buffer[MAX_INPUT];
+    size_t buffer_size;
 } in_buffer;
 
 int read_data(char const * input_file, double **test_set);
