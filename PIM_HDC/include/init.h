@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // 2d array to 1d array index
-#define A2D1D(d1,i0,i1) (((d1) * (i0)) + (i1))
+#define A2D1D(d1, i0, i1) (((d1) * (i0)) + (i1))
 
 // Expected versioned binary format (first 4 bytes)
 #define VERSION 0

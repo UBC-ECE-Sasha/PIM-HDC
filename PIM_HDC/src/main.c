@@ -1,19 +1,18 @@
-#include <stdlib.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <getopt.h>
-#include <assert.h>
-#include <sys/time.h>
-
-#include <dpu.h>
-#include <dpu_memory.h>
-#include <dpu_log.h>
-
 #include "associative_memory.h"
 #include "aux_functions.h"
-#include "init.h"
-#include "host_only.h"
 #include "common.h"
+#include "host_only.h"
+#include "init.h"
+
+#include <assert.h>
+#include <dpu.h>
+#include <dpu_log.h>
+#include <dpu_memory.h>
+#include <getopt.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
 
 // Original array lengths
 // double TEST_SET[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
@@ -29,13 +28,16 @@ typedef struct dpu_runtime {
     double execution_time_copy_out;
 } dpu_runtime;
 
-static double time_difference(struct timeval * start, struct timeval * end) {
+static double
+time_difference(struct timeval *start, struct timeval *end) {
     double start_time = start->tv_sec + start->tv_usec / 1000000.0;
     double end_time = end->tv_sec + end->tv_usec / 1000000.0;
     return (end_time - start_time);
 }
 
-static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in, int32_t * data_set, uint32_t *buff_offset, uint32_t dpu_id) {
+static int
+setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in,
+               int32_t *data_set, uint32_t *buff_offset, uint32_t dpu_id) {
     /* Computations must be n divisible unless extra at end */
     int32_t num_computations = buffer_channel_length / hd.n;
     int32_t remaining_computations = buffer_channel_length % hd.n;
@@ -83,7 +85,9 @@ static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length,
     input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
     if ((input->buffer_channel_usable_length * hd.channels) > SAMPLE_SIZE_MAX) {
-        fprintf(stderr, "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT = (%d)\n",
+        fprintf(stderr,
+                "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT "
+                "= (%d)\n",
                 input->buffer_channel_usable_length * hd.channels, SAMPLE_SIZE_MAX);
         return -1;
     }
@@ -99,8 +103,10 @@ static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length,
     if (input->buffer_channel_length > 0) {
         /* Copy each channel into DPU array */
         for (int i = 0; i < hd.channels; i++) {
-            int32_t * ta = &data_set[(i * number_of_input_samples) + *buff_offset];
-            dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i, input->buffer_channel_aligned_size, input->buffer_channel_length, input->buffer_channel_usable_length);
+            int32_t *ta = &data_set[(i * number_of_input_samples) + *buff_offset];
+            dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i,
+                       input->buffer_channel_aligned_size, input->buffer_channel_length,
+                       input->buffer_channel_usable_length);
             (void) memcpy(&data_in->buffer[i * input->buffer_channel_usable_length], ta, sz_xfer);
         }
     }
@@ -109,14 +115,16 @@ static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length,
 
     size_t total_xfer = 0;
     if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
-        fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t), MAX_INPUT);
+        fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t),
+                MAX_INPUT);
         return -1;
     }
 
     return 0;
 }
 
-static void calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
+static void
+calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
     /* Section of buffer for one channel, without samples not divisible by n */
     uint32_t samples = number_of_input_samples / NR_DPUS;
     /* Remove samples not divisible by n */
@@ -147,7 +155,8 @@ static void calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
  * @param[in] data_set Quantized data buffer
  * @return             Non-zero on failure.
  */
-static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
+static int
+prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     int ret = 0;
 
     struct timeval start, end;
@@ -177,12 +186,14 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
     DPU_RANK_FOREACH(dpus, dpu_rank) {
         dpu_id = dpu_id_rank;
         DPU_FOREACH(dpu_rank, dpu) {
-            ret = setup_dpu_data(&inputs[dpu_id], buffer_channel_lengths[dpu_id], &read_bufs[dpu_id], data_set, &buff_offset, dpu_id);
+            ret = setup_dpu_data(&inputs[dpu_id], buffer_channel_lengths[dpu_id],
+                                 &read_bufs[dpu_id], data_set, &buff_offset, dpu_id);
             if (ret != 0) {
                 return ret;
             }
 
-            dbg_printf("%u: buffer_channel_length = %u\n", dpu_id, inputs[dpu_id].buffer_channel_length);
+            dbg_printf("%u: buffer_channel_length = %u\n", dpu_id,
+                       inputs[dpu_id].buffer_channel_length);
 
             DPU_ASSERT(dpu_prepare_xfer(dpu, &hd));
 
@@ -195,7 +206,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, &inputs[dpu_id++]));
         }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]), DPU_XFER_DEFAULT));
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]),
+                                 DPU_XFER_DEFAULT));
 
         dpu_id = dpu_id_rank;
 
@@ -208,7 +220,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
             }
             dpu_id++;
         }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "read_buf", 0, largest, DPU_XFER_DEFAULT));
+        DPU_ASSERT(
+            dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "read_buf", 0, largest, DPU_XFER_DEFAULT));
 
         dpu_id_rank = dpu_id;
     }
@@ -245,7 +258,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
             dpu_id++;
         }
 
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer, DPU_XFER_DEFAULT));
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer,
+                                 DPU_XFER_DEFAULT));
 
         dpu_id_rank = dpu_id;
     }
@@ -277,7 +291,8 @@ static int prepare_dpu(int32_t * data_set, int32_t *results, void *runtime) {
  * @param[in] data_set Quantized data buffer
  * @return             Non-zero on failure.
  */
-static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
+static int
+host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
 
     (void) runtime;
 
@@ -294,11 +309,11 @@ static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
     memset(q_N, 0, (hd.bit_dim + 1) * sizeof(uint32_t));
     memset(quantized_buffer, 0, hd.channels * sizeof(uint32_t));
 
-    for(int ix = 0; ix < number_of_input_samples; ix += hd.n) {
+    for (int ix = 0; ix < number_of_input_samples; ix += hd.n) {
 
-        for(int z = 0; z < hd.n; z++) {
+        for (int z = 0; z < hd.n; z++) {
 
-            for(int j = 0; j < hd.channels; j++) {
+            for (int j = 0; j < hd.channels; j++) {
                 // NOTE: Buffer overflow in original code?
                 if (ix + z < number_of_input_samples) {
                     int ind = A2D1D(number_of_input_samples, j, ix + z);
@@ -317,7 +332,7 @@ static int host_hdc(int32_t * data_set, int32_t *results, void *runtime) {
                 // before performing the componentwise XOR operation with the new query (q_N).
                 overflow = q[0] & mask;
 
-                for(int i = 1; i < hd.bit_dim; i++){
+                for (int i = 1; i < hd.bit_dim; i++) {
                     old_overflow = overflow;
                     overflow = q[i] & mask;
                     q[i] = (q[i] >> 1) | (old_overflow << (32 - 1));
@@ -347,9 +362,10 @@ typedef struct hdc_data {
     double execution_time;
 } hdc_data;
 
-typedef int (*hdc)(int32_t * data_set, int32_t *results, void *runtime);
+typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
 
-static double run_hdc(hdc fn, hdc_data *data, void *runtime) {
+static double
+run_hdc(hdc fn, hdc_data *data, void *runtime) {
     struct timeval start;
     struct timeval end;
 
@@ -372,15 +388,16 @@ static double run_hdc(hdc fn, hdc_data *data, void *runtime) {
     return ret;
 }
 
-static int compare_results(hdc_data *dpu_data, hdc_data *host_data) {
+static int
+compare_results(hdc_data *dpu_data, hdc_data *host_data) {
     int ret = 0;
 
     printf("--- Compare --\n");
     printf("(%u) results\n", host_data->result_len);
     for (uint32_t i = 0; i < host_data->result_len; i++) {
         if (host_data->results[i] != dpu_data->results[i]) {
-            fprintf(stderr, "(host_results[%u] = %d) != (dpu_results[%u] = %d)\n",
-                    i, host_data->results[i], i, dpu_data->results[i]);
+            fprintf(stderr, "(host_results[%u] = %d) != (dpu_results[%u] = %d)\n", i,
+                    host_data->results[i], i, dpu_data->results[i]);
             ret = 1;
         }
     }
@@ -397,21 +414,22 @@ static int compare_results(hdc_data *dpu_data, hdc_data *host_data) {
         percent_diff = host_data->execution_time / dpu_data->execution_time;
     }
 
-
     printf("%s was %fs (%f x) faster\n", faster, time_diff, percent_diff);
 
     return ret;
 }
 
-static void print_results(hdc_data *data) {
+static void
+print_results(hdc_data *data) {
     for (uint32_t i = 0; i < data->result_len; i++) {
         printf("%d\n", data->results[i]);
     }
 }
 
-static void usage(FILE *stream, char const * exe_name) {
+static void
+usage(FILE *stream, char const *exe_name) {
 #ifdef DEBUG
-	fprintf(stream, "**DEBUG BUILD**\n");
+    fprintf(stream, "**DEBUG BUILD**\n");
 #endif
 
     fprintf(stream, "usage: %s -d -i <INPUT_FILE>\n", exe_name);
@@ -422,7 +440,8 @@ static void usage(FILE *stream, char const * exe_name) {
     fprintf(stream, "\th: help message\n");
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv) {
     bool use_dpu = false;
     bool show_results = false;
     bool test_results = false;
@@ -434,7 +453,7 @@ int main(int argc, char **argv) {
 
     int opt;
     while ((opt = getopt(argc, argv, options)) != -1) {
-        switch(opt) {
+        switch (opt) {
             case 'd':
                 use_dpu = true;
                 break;
@@ -481,8 +500,8 @@ int main(int argc, char **argv) {
 
     quantize_set(test_set, data_set);
 
-    hdc_data dpu_results = { .data_set = data_set };
-    hdc_data host_results = { .data_set = data_set };
+    hdc_data dpu_results = {.data_set = data_set};
+    hdc_data host_results = {.data_set = data_set};
 
     dpu_runtime runtime;
 

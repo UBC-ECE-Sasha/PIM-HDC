@@ -1,9 +1,9 @@
+#include "host_only.h"
+
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
-
-#include "host_only.h"
 
 dpu_hdc_vars hd;
 int32_t number_of_input_samples;
@@ -11,7 +11,8 @@ int32_t number_of_input_samples;
 /**
  * @brief Exit if NOMEM
  */
-void nomem() {
+void
+nomem() {
     fprintf(stderr, "ERROR: No memory\n");
     exit(ENOMEM);
 }
@@ -22,7 +23,8 @@ void nomem() {
  * @param[in] input_file    File to read from
  * @param[in,out] test_set  Test data to allocate and fill
  */
-int read_data(char const * input_file, double **test_set) {
+int
+read_data(char const *input_file, double **test_set) {
     int ret = 0;
     errno = 0;
     FILE *file = fopen(input_file, "rb");
@@ -36,14 +38,13 @@ int read_data(char const * input_file, double **test_set) {
         return ferror(file);
     }
     if (version != VERSION) {
-        fprintf(stderr, "Binary file version (%d) does not match expected (%d)\n", version, VERSION);
+        fprintf(stderr, "Binary file version (%d) does not match expected (%d)\n", version,
+                VERSION);
         return -1;
     }
-    if ((fread(&hd.dimension, 1, sz, file) != sz) ||
-        (fread(&hd.channels, 1, sz, file) != sz) ||
+    if ((fread(&hd.dimension, 1, sz, file) != sz) || (fread(&hd.channels, 1, sz, file) != sz) ||
         (fread(&hd.bit_dim, 1, sz, file) != sz) ||
-        (fread(&number_of_input_samples, 1, sz, file) != sz) ||
-        (fread(&hd.n, 1, sz, file) != sz) ||
+        (fread(&number_of_input_samples, 1, sz, file) != sz) || (fread(&hd.n, 1, sz, file) != sz) ||
         (fread(&hd.im_length, 1, sz, file) != sz)) {
         return ferror(file);
     }
@@ -82,7 +83,8 @@ int read_data(char const * input_file, double **test_set) {
  * @param[in] num Double to round
  * @return        Rounded integer value
  */
-int round_to_int(double num) {
+int
+round_to_int(double num) {
     return (num - floor(num) > 0.5) ? ceil(num) : floor(num);
 }
 
@@ -91,11 +93,12 @@ int round_to_int(double num) {
  *
  * @param[out] buffer Rounded integers
  */
-void quantize_set(double const * input_set, int32_t * buffer) {
-    for(int i = 0; i < hd.channels; i++) {
-        for(int j = 0; j < number_of_input_samples; j++) {
-            buffer[(i * number_of_input_samples) + j] = round_to_int(
-                input_set[(i * number_of_input_samples) + j]);
+void
+quantize_set(double const *input_set, int32_t *buffer) {
+    for (int i = 0; i < hd.channels; i++) {
+        for (int j = 0; j < number_of_input_samples; j++) {
+            buffer[(i * number_of_input_samples) + j] =
+                round_to_int(input_set[(i * number_of_input_samples) + j]);
         }
     }
 }

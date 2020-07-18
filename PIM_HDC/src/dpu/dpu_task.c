@@ -1,21 +1,21 @@
-#include <mram.h>
-#include <seqread.h>
-#include <defs.h>
-#include <perfcounter.h>
-#include <stdio.h>
-#include <errno.h>
-#include <alloc.h>
-#include <built_ins.h>
-#include <handshake.h>
-#include <string.h>
-#include <barrier.h>
-
-#include "global_dpu.h"
-#include "common.h"
 #include "associative_memory.h"
 #include "aux_functions.h"
-#include "init.h"
+#include "common.h"
 #include "cycle_counter.h"
+#include "global_dpu.h"
+#include "init.h"
+
+#include <alloc.h>
+#include <barrier.h>
+#include <built_ins.h>
+#include <defs.h>
+#include <errno.h>
+#include <handshake.h>
+#include <mram.h>
+#include <perfcounter.h>
+#include <seqread.h>
+#include <stdio.h>
+#include <string.h>
 
 #define MASK 1
 #define MRAM_MAX_READ_SIZE 2048
@@ -48,7 +48,8 @@ perfcounter_t bit_mod_cycles = 0;
  *
  * @return Non-zero on failure.
  */
-static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end) {
+static int
+dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
 
@@ -59,11 +60,11 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
     int ret = 0;
     int result_num = 0;
 
-    for(int ix = task_begin; ix < task_end; ix += hd.n) {
+    for (int ix = task_begin; ix < task_end; ix += hd.n) {
 
-        for(int z = 0; z < hd.n; z++) {
+        for (int z = 0; z < hd.n; z++) {
 
-            for(int j = 0; j < hd.channels; j++) {
+            for (int j = 0; j < hd.channels; j++) {
                 if (ix + z < dpu_data.buffer_channel_usable_length) {
                     int ind = A2D1D(dpu_data.buffer_channel_usable_length, j, ix + z);
                     quantized_buffer[j] = read_buf[ind];
@@ -86,7 +87,7 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
                 // before performing the componentwise XOR operation with the new query (q_N).
                 int32_t shifted_q;
                 overflow = q[0] & MASK;
-                for(int i = 1; i < hd.bit_dim; i++) {
+                for (int i = 1; i < hd.bit_dim; i++) {
                     old_overflow = overflow;
                     overflow = q[i] & MASK;
                     shifted_q = (q[i] >> 1) | (old_overflow << (32 - 1));
@@ -109,7 +110,8 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
         result[result_offset + result_num] = associative_memory_32bit(q, hd.aM_32);
         CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
 
-        dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num, result[result_offset + result_num]);
+        dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num,
+                   result[result_offset + result_num]);
 
         result_num++;
     }
@@ -119,7 +121,8 @@ static int dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin,
     return ret;
 }
 
-int main() {
+int
+main() {
     uint8_t idx = me();
 
     printf("DPU starting, tasklet %u / %u\n", idx, NR_TASKLETS);
@@ -137,7 +140,8 @@ int main() {
     barrier_wait(&start_barrier);
 
     if ((dpu_data.task_end[idx] - dpu_data.task_begin[idx]) > 0) {
-        ret = dpu_hdc(output, dpu_data.idx_offset[idx], dpu_data.task_begin[idx], dpu_data.task_end[idx]);
+        ret = dpu_hdc(output, dpu_data.idx_offset[idx], dpu_data.task_begin[idx],
+                      dpu_data.task_end[idx]);
     } else {
         printf("%u: No work to do\n", idx);
     }
@@ -151,11 +155,11 @@ int main() {
     perfcounter_t total_cycles = perfcounter_get();
     printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
     printf("compute_N_gram_cycles used %ld cycles (%f%%)\n", compute_N_gram_cycles,
-               (double)compute_N_gram_cycles / total_cycles);
+           (double) compute_N_gram_cycles / total_cycles);
     printf("associative_memory_cycles used %ld cycles (%f%%)\n", associative_memory_cycles,
-               (double)associative_memory_cycles / total_cycles);
+           (double) associative_memory_cycles / total_cycles);
     printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
-               (double)bit_mod_cycles / total_cycles);
+           (double) bit_mod_cycles / total_cycles);
 
     return ret;
 }

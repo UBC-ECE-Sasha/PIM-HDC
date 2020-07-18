@@ -1,9 +1,10 @@
 #ifndef GLOBAL_DPU_H_
 #define GLOBAL_DPU_H_
 
-#include <perfcounter.h>
-#include <defs.h>
 #include "init.h"
+
+#include <defs.h>
+#include <perfcounter.h>
 
 extern dpu_hdc_vars hd;
 

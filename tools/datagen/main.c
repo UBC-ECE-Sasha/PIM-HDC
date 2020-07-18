@@ -1,10 +1,10 @@
+#include "data/data.h"
+
+#include <errno.h>
+#include <getopt.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <getopt.h>
-#include <errno.h>
-
-#include "data/data.h"
 
 #define CONSTANTS 7
 
@@ -36,7 +36,7 @@
  * @return             Non-zero on failure
  */
 static int
-check_constant(int expected, int actual, char const * id) {
+check_constant(int expected, int actual, char const *id) {
     int ret = actual != expected;
     if (ret) {
         fprintf(stderr, "ERROR: %s=%d != %d\n", id, expected, actual);
@@ -54,14 +54,15 @@ check_constant(int expected, int actual, char const * id) {
  * @return              Number of wrong entries
  */
 static int
-check_array_uint32(int d0, int d1, uint32_t expected[d0][d1], uint32_t const * data) {
+check_array_uint32(int d0, int d1, uint32_t expected[d0][d1], uint32_t const *data) {
     int ret = 0;
     for (int i = 0; i < d0; i++) {
         for (int j = 0; j < d1; j++) {
             int ind = (i * d1) + j;
             uint32_t entry = data[ind];
             if (entry != expected[i][j]) {
-                fprintf(stderr, "ERROR: expected[%d][%d]=%u != data[%d]=%u\n", i, j, expected[i][j], ind, entry);
+                fprintf(stderr, "ERROR: expected[%d][%d]=%u != data[%d]=%u\n", i, j, expected[i][j],
+                        ind, entry);
                 ret++;
             }
         }
@@ -86,7 +87,7 @@ nomem() {
  * @return Non-zero on failure
  */
 static int
-validate_data(char const * output) {
+validate_data(char const *output) {
     int ret = 0;
     errno = 0;
     FILE *file = fopen(output, "rb");
@@ -141,7 +142,8 @@ validate_data(char const * output) {
     ret += check_constant(DIMENSION, constants[DIMENSION_INDEX], "DIMENSION");
     ret += check_constant(CHANNELS, constants[CHANNELS_INDEX], "CHANNELS");
     ret += check_constant(BIT_DIM, constants[BIT_DIM_INDEX], "BIT_DIM");
-    ret += check_constant(NUMBER_OF_INPUT_SAMPLES, constants[NUMBER_OF_INPUT_SAMPLES_INDEX], "NUMBER_OF_INPUT_SAMPLES");
+    ret += check_constant(NUMBER_OF_INPUT_SAMPLES, constants[NUMBER_OF_INPUT_SAMPLES_INDEX],
+                          "NUMBER_OF_INPUT_SAMPLES");
     ret += check_constant(N, constants[N_INDEX], "N");
     ret += check_constant(IM_LENGTH, constants[IM_LENGTH_INDEX], "IM_LENGTH");
 
@@ -151,16 +153,17 @@ validate_data(char const * output) {
             int ind = (i * constants[NUMBER_OF_INPUT_SAMPLES_INDEX] + j);
             double entry = test_set[ind];
             if (entry != TEST_SET[i][j]) {
-                fprintf(stderr, "ERROR: TEST_SET[%d][%d]=%f != test_set[%d]=%f\n", i, j, TEST_SET[i][j], ind, entry);
+                fprintf(stderr, "ERROR: TEST_SET[%d][%d]=%f != test_set[%d]=%f\n", i, j,
+                        TEST_SET[i][j], ind, entry);
                 ret++;
             }
         }
     }
 
-    ret += check_array_uint32(CHANNELS, BIT_DIM+1, chAM, test_chAM);
-    ret += check_array_uint32(IM_LENGTH, BIT_DIM+1, iM, test_iM);
-    ret += check_array_uint32(CHANNELS, BIT_DIM+1, chAM, test_chAM);
-    ret += check_array_uint32(N, BIT_DIM+1, aM_32, test_aM_32);
+    ret += check_array_uint32(CHANNELS, BIT_DIM + 1, chAM, test_chAM);
+    ret += check_array_uint32(IM_LENGTH, BIT_DIM + 1, iM, test_iM);
+    ret += check_array_uint32(CHANNELS, BIT_DIM + 1, chAM, test_chAM);
+    ret += check_array_uint32(N, BIT_DIM + 1, aM_32, test_aM_32);
 
     fclose(file);
     return ret;
@@ -172,7 +175,7 @@ validate_data(char const * output) {
  * @return Non-zero on failure
  */
 static int
-generate_data_file(char const * output) {
+generate_data_file(char const *output) {
     int ret = 0;
     errno = 0;
     FILE *file = fopen(output, "wb");
@@ -180,7 +183,8 @@ generate_data_file(char const * output) {
         return errno != 0 ? errno : -1;
     }
 
-    int32_t constants[CONSTANTS] = {VERSION, DIMENSION, CHANNELS, BIT_DIM, NUMBER_OF_INPUT_SAMPLES, N, IM_LENGTH};
+    int32_t constants[CONSTANTS] = {VERSION, DIMENSION, CHANNELS, BIT_DIM, NUMBER_OF_INPUT_SAMPLES,
+                                    N,       IM_LENGTH};
     fwrite(constants, sizeof(constants), 1, file);
     if ((ret = ferror(file)) != 0) {
         fprintf(stderr, "Failed to write constants to %s", output);

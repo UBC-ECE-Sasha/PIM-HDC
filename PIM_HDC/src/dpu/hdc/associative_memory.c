@@ -1,7 +1,7 @@
-#include "global_dpu.h"
-
 #include "associative_memory.h"
+
 #include "aux_functions.h"
+#include "global_dpu.h"
 
 /**
  * @brief Tests the accuracy based on input testing queries.
@@ -10,7 +10,8 @@
  * @param[in] aM_32 Trained associative memory
  * @return          Classification result
  */
-int associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
+int
+associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
     int sims[CLASSES] = {0};
 
     // Computes Hamming Distances
