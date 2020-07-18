@@ -44,19 +44,22 @@ static int setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length,
         uint32_t task_begin = 0;
         uint32_t task_end = 0;
 
-        if (num_computations >= (idx + 1)) {
-            if (num_computations < NR_TASKLETS) {
+        if (num_computations < NR_TASKLETS) {
+            if (num_computations >= (idx + 1)) {
                 task_begin = idx * hd.n;
                 task_end = task_begin + hd.n;
-            } else {
-                uint32_t split_computations = (num_computations / NR_TASKLETS) * hd.n;
-                task_begin = idx * split_computations;
-                task_end = task_begin + split_computations;
+            } else if (remaining_computations > 0) {
+                task_begin = idx * hd.n;
+                task_end = task_begin + remaining_computations;
+            }
+        } else {
+            uint32_t split_computations = (num_computations / NR_TASKLETS) * hd.n;
+            task_begin = idx * split_computations;
+            task_end = task_begin + split_computations;
 
-                if ((idx + 1) == NR_TASKLETS) {
-                    uint32_t task_extra = (num_computations % NR_TASKLETS);
-                    task_end += remaining_computations + (task_extra * hd.n);
-                }
+            if ((idx + 1) == NR_TASKLETS) {
+                uint32_t task_extra = (num_computations % NR_TASKLETS);
+                task_end += remaining_computations + (task_extra * hd.n);
             }
         }
 
