@@ -3,3 +3,4 @@
 /.idea
 /*.png
 /*.csv
+!/example.output.png
