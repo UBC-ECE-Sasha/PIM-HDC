@@ -2,6 +2,12 @@
 
 set -e
 
+# Generate a CSV file of runs based on:
+#     MIN_DPU MAX_DPU MIN_TASKLET MAX_TASKLET [ DPU_INTERVAL ]
+#
+# eg:
+#     ./bench.sh 32 64 1 5 2
+
 dpu_interval=1
 dpu_only=0
 min_dpu=""
