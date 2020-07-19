@@ -127,11 +127,11 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     }
     input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
-    if ((input->buffer_channel_usable_length * hd.channels) > SAMPLE_SIZE_MAX) {
+    if ((input->buffer_channel_usable_length * hd.channels) > MAX_INPUT) {
         fprintf(stderr,
                 "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT "
                 "= (%d)\n",
-                input->buffer_channel_usable_length * hd.channels, SAMPLE_SIZE_MAX);
+                input->buffer_channel_usable_length * hd.channels, MAX_INPUT);
         return -1;
     }
 
@@ -296,9 +296,10 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
         uint32_t largest_size_xfer = 0;
         DPU_FOREACH(dpu_rank, dpu) {
+#ifdef SHOW_DPU_LOGS
             printf("------DPU %d Logs------\n", dpu_id);
             DPU_ASSERT(dpu_log_read(dpu, stdout));
-
+#endif
             uint32_t size_xfer = inputs[dpu_id].output_buffer_length * sizeof(int32_t);
             if (size_xfer > largest_size_xfer) {
                 largest_size_xfer = size_xfer;
@@ -367,7 +368,6 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
         for (int z = 0; z < hd.n; z++) {
 
             for (int j = 0; j < hd.channels; j++) {
-                // NOTE: Buffer overflow in original code?
                 if (ix + z < number_of_input_samples) {
                     int ind = A2D1D(number_of_input_samples, j, ix + z);
                     quantized_buffer[j] = data_set[ind];
@@ -447,21 +447,32 @@ run_hdc(hdc fn, hdc_data *data, void *runtime) {
  *
  * @param[in] dpu_data   Results to be tested from DPU
  * @param[in] host_data  Results to be tested from host
+ * @param[in] check_only Only check results are equal, dont print differences
  *
  * @return               Non-zero if results are not the same
  */
 static int
-compare_results(hdc_data *dpu_data, hdc_data *host_data) {
+compare_results(hdc_data *dpu_data, hdc_data *host_data, bool check_only) {
     int ret = 0;
 
-    printf("--- Compare --\n");
-    printf("(%u) results\n", host_data->result_len);
+    if (!check_only) {
+        printf("--- Compare --\n");
+        printf("(%u) results\n", host_data->result_len);
+    }
+
     for (uint32_t i = 0; i < host_data->result_len; i++) {
         if (host_data->results[i] != dpu_data->results[i]) {
+            if (check_only) {
+                return -1;
+            }
             fprintf(stderr, "(host_results[%u] = %d) != (dpu_results[%u] = %d)\n", i,
                     host_data->results[i], i, dpu_data->results[i]);
-            ret = 1;
+            ret = -1;
         }
+    }
+
+    if (check_only) {
+        return 0;
     }
 
     char *faster;
@@ -506,6 +517,7 @@ usage(FILE *stream, char const *exe_name) {
     fprintf(stream, "usage: %s -d -i <INPUT_FILE>\n", exe_name);
     fprintf(stream, "\td: use DPU\n");
     fprintf(stream, "\ti: input file\n");
+    fprintf(stream, "\tr: show runtime only\n");
     fprintf(stream, "\ts: show results\n");
     fprintf(stream, "\tt: test results\n");
     fprintf(stream, "\th: help message\n");
@@ -516,10 +528,11 @@ main(int argc, char **argv) {
     bool use_dpu = false;
     bool show_results = false;
     bool test_results = false;
+    bool runtime_only = false;
     int ret = 0;
     int dpu_ret = 0;
     int host_ret = 0;
-    char const options[] = "dsthi:";
+    char const options[] = "dsthri:";
     char *input = NULL;
 
     int opt;
@@ -539,6 +552,10 @@ main(int argc, char **argv) {
 
             case 't':
                 test_results = true;
+                break;
+
+            case 'r':
+                runtime_only = true;
                 break;
 
             case 'h':
@@ -585,26 +602,34 @@ main(int argc, char **argv) {
     }
 
     if (use_dpu || test_results) {
-        printf("--- DPU --\n");
-        if (show_results) {
-            print_results(&dpu_results);
+        if (!runtime_only) {
+            printf("--- DPU --\n");
+            if (show_results) {
+                print_results(&dpu_results);
+            }
+            printf("DPU took %fs\n", dpu_results.execution_time);
+            printf("DPU copy_in took %fs\n", runtime.execution_time_copy_in);
+            printf("DPU launch took %fs\n", runtime.execution_time_launch);
+            printf("DPU copy_out took %fs\n", runtime.execution_time_copy_out);
+        } else {
+            printf("%f\n", dpu_results.execution_time);
         }
-        printf("DPU took %fs\n", dpu_results.execution_time);
-        printf("DPU copy_in took %fs\n", runtime.execution_time_copy_in);
-        printf("DPU launch took %fs\n", runtime.execution_time_launch);
-        printf("DPU copy_out took %fs\n", runtime.execution_time_copy_out);
     }
 
     if (!use_dpu || test_results) {
-        printf("--- Host --\n");
-        if (show_results) {
-            print_results(&host_results);
+        if (!runtime_only) {
+            printf("--- Host --\n");
+            if (show_results) {
+                print_results(&host_results);
+            }
+            printf("Host took %fs\n", host_results.execution_time);
+        } else {
+            printf("%f\n", host_results.execution_time);
         }
-        printf("Host took %fs\n", host_results.execution_time);
     }
 
     if (test_results) {
-        ret = compare_results(&dpu_results, &host_results);
+        ret = compare_results(&dpu_results, &host_results, runtime_only);
     }
 
     free(data_set);
