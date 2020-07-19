@@ -50,7 +50,7 @@ def generate_plots(
     list_dpus = list(nr_dpu_uniq)
     list_dpus.sort()
 
-    plots[f"Host (1 core)"] = [average_host for _ in range(0, len(list_dpus))]
+    plots[f"Host (1 thread)"] = [average_host for _ in range(0, len(list_dpus))]
 
     return list_dpus, plots
 
