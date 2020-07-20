@@ -6,7 +6,7 @@ set -e
 #     MIN_DPU MAX_DPU MIN_TASKLET MAX_TASKLET [ DPU_INTERVAL ]
 #
 # eg:
-#     ./bench.sh 32 64 1 5 2
+#     ./bench.sh -i large-data.h 32 64 1 5 2
 
 dpu_interval=1
 dpu_only=0
@@ -45,7 +45,7 @@ usage() {
     exit "${1}"
 }
 
-options='hi:'
+options='hdi:'
 while getopts $options option; do
     case $option in
         h  ) usage 0;;
