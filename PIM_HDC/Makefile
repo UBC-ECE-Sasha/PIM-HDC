@@ -12,6 +12,13 @@ ifeq ($(TEST), 1)
 	CFLAGS+=-DTEST
 endif
 
+SHOW_DPU_LOGS ?= 1
+
+# define SHOW_DPU_LOGS in the source if we want DPU logs
+ifeq ($(SHOW_DPU_LOGS), 1)
+	CFLAGS+=-DSHOW_DPU_LOGS
+endif
+
 # Default
 NR_DPUS ?= 32
 NR_TASKLETS ?= 1

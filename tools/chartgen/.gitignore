@@ -1,0 +1,6 @@
+/venv
+/.venv
+/.idea
+/*.png
+/*.csv
+!/example.output.png
