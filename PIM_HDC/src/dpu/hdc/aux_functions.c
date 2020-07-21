@@ -2,10 +2,12 @@
 
 #include "common.h"
 #include "cycle_counter.h"
+#include "global_dpu.h"
 
+#include <mram.h>
+#include <mutex.h>
 #include <alloc.h>
 #include <built_ins.h>
-#include <mutex.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -49,34 +51,32 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
     }
 }
 
-// Original array lengths
-// double TEST_SET[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
-// uint32_t chAM[CHANNELS][BIT_DIM + 1];
-// uint32_t iM[IM_LENGTH][BIT_DIM + 1];
-// uint32_t aM_32[N][BIT_DIM + 1];
-
 /**
  * @brief Computes the N-gram.
  *
  * @param[in] input       Input data
- * @param[in] channel_iM  Item Memory for the IDs of @p CHANNELS
- * @param[in] channel_AM  Continuous Item Memory for the values of a channel
  * @param[out] query      Query hypervector
  */
 void
-compute_N_gram(int32_t input[hd.channels], uint32_t *channel_iM, uint32_t *channel_AM,
-               uint32_t query[hd.bit_dim + 1]) {
-
-    // Pseudo-2d array:
+compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
 
     uint32_t chHV[MAX_CHANNELS + 1] = {0};
 
     for (int i = 0; i < hd.bit_dim + 1; i++) {
         query[i] = 0;
+
         for (int j = 0; j < hd.channels; j++) {
             int32_t ix = input[j];
-            chHV[j] =
-                channel_iM[A2D1D(hd.bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(hd.bit_dim + 1, j, i)];
+            uint32_t im;
+#ifdef IM_IN_WRAM
+            im = hd.iM[A2D1D(hd.bit_dim + 1, ix, i)];
+#else
+            __dma_aligned uint32_t iM[2];
+            uint32_t ind = A2D1D(hd.bit_dim + 1, ix, i);
+            mram_read(&mram_iM[ind], iM, ALIGN(2 * sizeof(uint32_t), 8));
+            im = iM[(ind % 2) != 0];
+#endif
+            chHV[j] = im ^ hd.chAM[A2D1D(hd.bit_dim + 1, j, i)];
         }
 
         // this is done to make the dimension of the matrix for the componentwise majority odd.
@@ -108,7 +108,7 @@ number_of_set_bits(uint32_t i) {
     int set_bits;
 #ifdef BUILTIN_CAO
     // Retrieve number of set bits (count all ones)
-    __builtin_cao_rr(set_bits, i);
+    return __builtin_popcount(i);
 #else
     i = i - ((i >> 1) & 0x55555555);
     i = (i & 0x33333333) + ((i >> 2) & 0x33333333);

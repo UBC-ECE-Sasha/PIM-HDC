@@ -10,6 +10,10 @@ extern int32_t number_of_input_samples;
 
 extern dpu_hdc_vars hd;
 
+#ifndef IM_IN_WRAM
+    extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+#endif
+
 int
 read_data(char const *input_file, double **test_set);
 int

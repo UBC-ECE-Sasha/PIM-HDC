@@ -259,6 +259,16 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]),
                                  DPU_XFER_DEFAULT));
 
+#ifndef IM_IN_WRAM
+        dpu_id = dpu_id_rank;
+        uint32_t sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, sz,
+                                 DPU_XFER_DEFAULT));
+#endif
+
         dpu_id = dpu_id_rank;
 
         // Slightly faster than individual copy in without prepare
@@ -377,9 +387,9 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
             // Spatial and Temporal Encoder: computes the n-gram.
             // N.B. if n = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q);
+                compute_N_gram(quantized_buffer, q);
             } else {
-                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q_N);
+                compute_N_gram(quantized_buffer, q_N);
 
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).

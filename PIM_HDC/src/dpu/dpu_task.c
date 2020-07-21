@@ -32,22 +32,15 @@ __host dpu_hdc_vars hd;
 __host int32_t read_buf[MAX_INPUT];
 __dma_aligned int32_t *output;
 
+// MRAM
+#ifndef IM_IN_WRAM
+uint32_t __mram_noinit mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+#endif
+
 perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
 perfcounter_t associative_memory_cycles = 0;
 perfcounter_t bit_mod_cycles = 0;
-
-// Original array lengths
-// double TEST_SET[CHANNELS][NUMBER_OF_INPUT_SAMPLES];
-// uint32_t chAM[CHANNELS][BIT_DIM + 1];
-// uint32_t iM[IM_LENGTH][BIT_DIM + 1];
-// uint32_t aM_32[N][BIT_DIM + 1];
-
-/**
- * @brief Run HDC algorithm
- *
- * @return Non-zero on failure.
- */
 
 /**
  * @brief Run HDC algorithm
@@ -85,11 +78,11 @@ dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t t
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
                 CYCLES_COUNT_START(&counter);
-                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q);
+                compute_N_gram(quantized_buffer, q);
                 CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
             } else {
                 CYCLES_COUNT_START(&counter);
-                compute_N_gram(quantized_buffer, hd.iM, hd.chAM, q_N);
+                compute_N_gram(quantized_buffer, q_N);
                 CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
 
                 CYCLES_COUNT_START(&counter);

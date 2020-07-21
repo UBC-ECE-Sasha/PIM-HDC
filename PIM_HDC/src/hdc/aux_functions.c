@@ -46,13 +46,10 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
  * @brief Computes the N-gram.
  *
  * @param[in] input       Input data
- * @param[in] channel_iM  Item Memory for the IDs of @p CHANNELS
- * @param[in] channel_AM  Continuous Item Memory for the values of a channel
  * @param[out] query      Query hypervector
  */
 void
-compute_N_gram(int32_t input[hd.channels], uint32_t *channel_iM, uint32_t *channel_AM,
-               uint32_t query[hd.bit_dim + 1]) {
+compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
 
     uint32_t chHV[hd.channels + 1];
 
@@ -60,8 +57,13 @@ compute_N_gram(int32_t input[hd.channels], uint32_t *channel_iM, uint32_t *chann
         query[i] = 0;
         for (int j = 0; j < hd.channels; j++) {
             int ix = input[j];
-            chHV[j] =
-                channel_iM[A2D1D(hd.bit_dim + 1, ix, i)] ^ channel_AM[A2D1D(hd.bit_dim + 1, j, i)];
+            uint32_t im;
+#ifdef IM_IN_WRAM
+            im = hd.iM[A2D1D(hd.bit_dim + 1, ix, i)];
+#else
+            im = iM[A2D1D(hd.bit_dim + 1, ix, i)];
+#endif
+            chHV[j] = im ^ hd.chAM[A2D1D(hd.bit_dim + 1, j, i)];
         }
         // this is done to make the dimension of the matrix for the componentwise majority odd.
         chHV[hd.channels] = chHV[0] ^ chHV[1];

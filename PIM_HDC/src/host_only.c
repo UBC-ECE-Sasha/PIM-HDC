@@ -8,6 +8,10 @@
 dpu_hdc_vars hd;
 int32_t number_of_input_samples;
 
+#ifndef IM_IN_WRAM
+    uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+#endif
+
 /**
  * @brief Exit if NOMEM
  */
@@ -64,7 +68,12 @@ read_data(char const *input_file, double **test_set) {
     }
 
     sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
-    if (fread(hd.iM, 1, sz, file) != sz) {
+#ifdef IM_IN_WRAM
+    size_t bread = fread(hd.iM, 1, sz, file);
+#else
+    size_t bread = fread(iM, 1, sz, file);
+#endif
+    if (bread != sz) {
         return ferror(file);
     }
 
