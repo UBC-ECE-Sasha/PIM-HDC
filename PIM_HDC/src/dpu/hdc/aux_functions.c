@@ -12,6 +12,7 @@
 #include <string.h>
 
 #define BUILTIN_CAO
+#define MINIMUM_MRAM_32B_READ 2
 
 /**
  * @brief Computes the maximum Hamming Distance.
@@ -52,6 +53,22 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
 }
 
 /**
+ * @brief Read 32 bits from MRAM
+ *
+ * @param[in] ind         Read index
+ * @param[in] mram_buf    MRAM array to read from at @p ind
+ * @return                32bit read from @p mram_buf
+ */
+static uint32_t
+read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr * mram_buf) {
+    __dma_aligned uint32_t buf[MINIMUM_MRAM_32B_READ];
+    mram_read(&mram_buf[ind], buf, MINIMUM_MRAM_32B_READ * sizeof(uint32_t));
+
+    /* Data will be offset if the data address is not 8 byte aligned */
+    return buf[(ind % 2) != 0];
+}
+
+/**
  * @brief Computes the N-gram.
  *
  * @param[in] input       Input data
@@ -74,18 +91,14 @@ compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
 #ifdef IM_IN_WRAM
             im = hd.iM[im_ind];
 #else
-            __dma_aligned uint32_t iM[2];
-            mram_read(&mram_iM[im_ind], iM, ALIGN(2 * sizeof(uint32_t), 8));
-            im = iM[(im_ind % 2) != 0];
+            im = read_32bits_from_mram(im_ind, mram_iM);
 #endif
 
             uint32_t cham_ind = A2D1D(hd.bit_dim + 1, j, i);
 #ifdef CHAM_IN_WRAM
             cham = hd.chAM[cham_ind];
 #else
-            __dma_aligned uint32_t chAM[2];
-            mram_read(&mram_chAM[cham_ind], chAM, ALIGN(2 * sizeof(uint32_t), 8));
-            cham = chAM[(cham_ind % 2) != 0];
+            cham = read_32bits_from_mram(cham_ind, mram_chAM);
 #endif
             chHV[j] = im ^ cham;
         }
