@@ -632,7 +632,8 @@ main(int argc, char **argv) {
             printf("DPU launch took %fs\n", runtime.execution_time_launch);
             printf("DPU copy_out took %fs\n", runtime.execution_time_copy_out);
         } else {
-            printf("%f\n", dpu_results.execution_time);
+            printf("%f,%f,%f,%f\n", dpu_results.execution_time, runtime.execution_time_copy_in,
+                   runtime.execution_time_launch, runtime.execution_time_copy_out);
         }
     }
 
