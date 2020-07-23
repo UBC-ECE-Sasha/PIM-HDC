@@ -78,8 +78,7 @@ compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
         chHV[hd.channels] = chHV[0] ^ chHV[1];
 
         // componentwise majority: insert the value of the ith bit of each chHV row in the variable
-        // "majority" and then compute the number of 1's with the function
-        // numberOfSetBits(uint32_t).
+        // "majority" and then compute the number of 1's
         for (int z = 31; z >= 0; z--) {
             uint32_t majority = 0;
             for (int j = 0; j < hd.channels + 1; j++) {
