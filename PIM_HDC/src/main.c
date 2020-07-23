@@ -259,13 +259,23 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]),
                                  DPU_XFER_DEFAULT));
 
+#ifndef CHAM_IN_WRAM
+        dpu_id = dpu_id_rank;
+        uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);;
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, chAM));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_chAM", 0, cham_sz,
+                                 DPU_XFER_DEFAULT));
+#endif
+
 #ifndef IM_IN_WRAM
         dpu_id = dpu_id_rank;
-        uint32_t sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
+        uint32_t im_sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
         }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, sz,
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, im_sz,
                                  DPU_XFER_DEFAULT));
 #endif
 
@@ -598,8 +608,8 @@ main(int argc, char **argv) {
 
     quantize_set(test_set, data_set);
 
-    hdc_data dpu_results = {.data_set = data_set};
-    hdc_data host_results = {.data_set = data_set};
+    hdc_data dpu_results = {.data_set = data_set, .results = NULL };
+    hdc_data host_results = {.data_set = data_set, .results = NULL };
 
     dpu_runtime runtime;
 

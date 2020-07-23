@@ -68,15 +68,26 @@ compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
         for (int j = 0; j < hd.channels; j++) {
             int32_t ix = input[j];
             uint32_t im;
+            uint32_t cham;
+
+            uint32_t im_ind = A2D1D(hd.bit_dim + 1, ix, i);
 #ifdef IM_IN_WRAM
-            im = hd.iM[A2D1D(hd.bit_dim + 1, ix, i)];
+            im = hd.iM[im_ind];
 #else
             __dma_aligned uint32_t iM[2];
-            uint32_t ind = A2D1D(hd.bit_dim + 1, ix, i);
-            mram_read(&mram_iM[ind], iM, ALIGN(2 * sizeof(uint32_t), 8));
-            im = iM[(ind % 2) != 0];
+            mram_read(&mram_iM[im_ind], iM, ALIGN(2 * sizeof(uint32_t), 8));
+            im = iM[(im_ind % 2) != 0];
 #endif
-            chHV[j] = im ^ hd.chAM[A2D1D(hd.bit_dim + 1, j, i)];
+
+            uint32_t cham_ind = A2D1D(hd.bit_dim + 1, j, i);
+#ifdef CHAM_IN_WRAM
+            cham = hd.chAM[cham_ind];
+#else
+            __dma_aligned uint32_t chAM[2];
+            mram_read(&mram_chAM[cham_ind], chAM, ALIGN(2 * sizeof(uint32_t), 8));
+            cham = chAM[(cham_ind % 2) != 0];
+#endif
+            chHV[j] = im ^ cham;
         }
 
         // this is done to make the dimension of the matrix for the componentwise majority odd.

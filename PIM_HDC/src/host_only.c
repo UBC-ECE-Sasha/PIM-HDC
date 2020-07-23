@@ -12,6 +12,10 @@ int32_t number_of_input_samples;
     uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 #endif
 
+#ifndef CHAM_IN_WRAM
+    uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+#endif
+
 /**
  * @brief Exit if NOMEM
  */
@@ -63,15 +67,21 @@ read_data(char const *input_file, double **test_set) {
     }
 
     sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
-    if (fread(hd.chAM, 1, sz, file) != sz) {
+    size_t bread;
+#ifdef CHAM_IN_WRAM
+    bread = fread(hd.chAM, 1, sz, file);
+#else
+    bread = fread(chAM, 1, sz, file);
+#endif
+    if (bread != sz) {
         return ferror(file);
     }
 
     sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
 #ifdef IM_IN_WRAM
-    size_t bread = fread(hd.iM, 1, sz, file);
+    bread = fread(hd.iM, 1, sz, file);
 #else
-    size_t bread = fread(iM, 1, sz, file);
+    bread = fread(iM, 1, sz, file);
 #endif
     if (bread != sz) {
         return ferror(file);

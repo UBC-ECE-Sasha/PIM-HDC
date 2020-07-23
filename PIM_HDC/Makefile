@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = --std=c11 -O3 -g -Wall -Wextra
+CFLAGS = -Wl,--stack,16777216 -lm --std=c11 -O3 -g -Wall -Wextra
 DPU_OPTS = `dpu-pkg-config --cflags --libs dpu`
 TARGET = pim_hdc
 
@@ -19,10 +19,16 @@ ifeq ($(SHOW_DPU_LOGS), 1)
 	CFLAGS+=-DSHOW_DPU_LOGS
 endif
 
-IM_IN_WRAM ?= 1
+IM_IN_WRAM ?= 0
 
 ifeq ($(IM_IN_WRAM), 1)
 	CFLAGS+=-DIM_IN_WRAM
+endif
+
+CHAM_IN_WRAM ?= 0
+
+ifeq ($(CHAM_IN_WRAM), 1)
+	CFLAGS+=-DCHAM_IN_WRAM
 endif
 
 # Default
@@ -63,6 +69,7 @@ dpu:
 	TEST=$(TEST) MAX_BIT_DIM=$(MAX_BIT_DIM) MAX_CHANNELS=$(MAX_CHANNELS) \
 	MAX_N=$(MAX_N) MAX_IM_LENGTH=$(MAX_IM_LENGTH) \
 	MAX_INPUT=$(MAX_INPUT) IM_IN_WRAM=$(IM_IN_WRAM) \
+	CHAM_IN_WRAM=$(CHAM_IN_WRAM) \
 	$(MAKE) -C src/dpu
 
 clean:

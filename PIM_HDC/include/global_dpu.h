@@ -12,6 +12,10 @@ extern dpu_hdc_vars hd;
 extern uint32_t __mram_ptr mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 #endif
 
+#ifndef CHAM_IN_WRAM
+extern uint32_t __mram_ptr mram_chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+#endif
+
 extern perfcounter_t compute_N_gram_cycles;
 extern perfcounter_t associative_memory_cycles;
 extern perfcounter_t bit_mod_cycles;

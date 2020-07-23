@@ -43,7 +43,9 @@ typedef struct dpu_hdc_vars {
     int32_t bit_dim;   /**< Dimension of the hypervectors after compression */
     int32_t n;         /**< Dimension of the N-grams */
     int32_t im_length; /**< Item memory length */
+#ifdef CHAM_IN_WRAM
     uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];  /**< Continuous item memory */
+#endif
 #ifdef IM_IN_WRAM
     uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];   /**< Item memory */
 #endif

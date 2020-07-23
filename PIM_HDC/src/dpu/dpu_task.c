@@ -37,6 +37,10 @@ __dma_aligned int32_t *output;
 uint32_t __mram_noinit mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 #endif
 
+#ifndef CHAM_IN_WRAM
+uint32_t __mram_noinit mram_chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+#endif
+
 perfcounter_t counter = 0;
 perfcounter_t compute_N_gram_cycles = 0;
 perfcounter_t associative_memory_cycles = 0;

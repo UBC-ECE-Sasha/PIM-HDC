@@ -10,6 +10,10 @@ ifeq ($(TEST), 1)
 	CFLAGS+=-DTEST
 endif
 
+ifeq ($(CHAM_IN_WRAM), 1)
+	CFLAGS+=-DCHAM_IN_WRAM
+endif
+
 ifeq ($(IM_IN_WRAM), 1)
 	CFLAGS+=-DIM_IN_WRAM
 endif
