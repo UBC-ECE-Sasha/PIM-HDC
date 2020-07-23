@@ -4,10 +4,10 @@
 #include "cycle_counter.h"
 #include "global_dpu.h"
 
-#include <mram.h>
-#include <mutex.h>
 #include <alloc.h>
 #include <built_ins.h>
+#include <mram.h>
+#include <mutex.h>
 #include <stdio.h>
 #include <string.h>
 

@@ -37,7 +37,6 @@ typedef struct hdc_data {
     double execution_time; /**< Total execution time of run */
 } hdc_data;
 
-
 /**
  * @struct in_buffer
  *
@@ -68,13 +67,15 @@ time_difference(struct timeval *start, struct timeval *end) {
 }
 
 /**
- * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as possible
+ * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as
+ * possible
  * @param[in]  length                  Lengths of @p buffer_channel_lengths
  * @param[in]  samples                 Samples to distribute
  * @param[out] buffer_channel_lengths  Lengths for each channel
  */
 static void
-calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length], uint32_t input_samples) {
+calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length],
+                         uint32_t input_samples) {
     /* Section of buffer for one channel, without samples not divisible by n */
     uint32_t samples = input_samples / length;
     /* Remove samples not divisible by n */
@@ -131,7 +132,8 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
 
         dbg_printf("%u: samples = %u\n", idx, task_samples);
         dbg_printf("%u: idx_offset = %u\n", idx, input->idx_offset[idx]);
-        dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, input->task_end[idx], input->task_begin[idx]);
+        dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, input->task_end[idx],
+                   input->task_begin[idx]);
     }
 
     /* Input */
@@ -213,10 +215,10 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
 #ifdef TASK_DISTRIBUTION
     printf("%s,%s,%s\n", "DPU", "Tasklet", "Samples");
-    for (int i =0; i < NR_DPUS; i++) {
-        ret = setup_dpu_data(&inputs[i], buffer_channel_lengths[i],
-                                 &read_bufs[i], data_set, &buff_offset, i);
-        for (int j = 0; j< NR_TASKLETS; j++) {
+    for (int i = 0; i < NR_DPUS; i++) {
+        ret = setup_dpu_data(&inputs[i], buffer_channel_lengths[i], &read_bufs[i], data_set,
+                             &buff_offset, i);
+        for (int j = 0; j < NR_TASKLETS; j++) {
             printf("%d,%d,%d\n", i, j, inputs[i].task_end[j] - inputs[i].task_begin[j]);
         }
     }
@@ -259,12 +261,13 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
 #ifndef CHAM_IN_WRAM
         dpu_id = dpu_id_rank;
-        uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);;
+        uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
+        ;
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, chAM));
         }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_chAM", 0, cham_sz,
-                                 DPU_XFER_DEFAULT));
+        DPU_ASSERT(
+            dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_chAM", 0, cham_sz, DPU_XFER_DEFAULT));
 #endif
 
 #ifndef IM_IN_WRAM
@@ -273,8 +276,7 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
         }
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, im_sz,
-                                 DPU_XFER_DEFAULT));
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, im_sz, DPU_XFER_DEFAULT));
 #endif
 
         dpu_id = dpu_id_rank;
@@ -606,8 +608,8 @@ main(int argc, char **argv) {
 
     quantize_set(test_set, data_set);
 
-    hdc_data dpu_results = {.data_set = data_set, .results = NULL };
-    hdc_data host_results = {.data_set = data_set, .results = NULL };
+    hdc_data dpu_results = {.data_set = data_set, .results = NULL};
+    hdc_data host_results = {.data_set = data_set, .results = NULL};
 
     dpu_runtime runtime;
 

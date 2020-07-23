@@ -9,11 +9,11 @@ dpu_hdc_vars hd;
 int32_t number_of_input_samples;
 
 #ifndef IM_IN_WRAM
-    uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
+uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 #endif
 
 #ifndef CHAM_IN_WRAM
-    uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 #endif
 
 /**
