@@ -68,6 +68,38 @@ time_difference(struct timeval *start, struct timeval *end) {
 }
 
 /**
+ * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as possible
+ * @param[in]  length                  Lengths of @p buffer_channel_lengths
+ * @param[in]  samples                 Samples to distribute
+ * @param[out] buffer_channel_lengths  Lengths for each channel
+ */
+static void
+calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length], uint32_t input_samples) {
+    /* Section of buffer for one channel, without samples not divisible by n */
+    uint32_t samples = input_samples / length;
+    /* Remove samples not divisible by n */
+    uint32_t chunk_size = samples - (samples % hd.n);
+    /* Extra data for last DPU */
+    uint32_t extra_data = input_samples - (chunk_size * length);
+    uint32_t extra_data_divisible = extra_data / hd.n;
+
+    for (uint32_t i = 0; i < length; i++) {
+        buffer_channel_lengths[i] = chunk_size;
+    }
+
+    uint32_t i = 0;
+    while (extra_data_divisible != 0) {
+        buffer_channel_lengths[i] += hd.n;
+        extra_data_divisible--;
+        i++;
+        if (i == length) {
+            i = 0;
+        }
+    }
+    buffer_channel_lengths[length - 1] += extra_data % hd.n;
+}
+
+/**
  * @brief Set up the data for each DPU
  * @param[out]    input                  Datastructure to be populated for DPU
  * @param[in]     buffer_channel_length  Length of an individual channel
@@ -81,41 +113,25 @@ time_difference(struct timeval *start, struct timeval *end) {
 static int
 setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in,
                int32_t *data_set, uint32_t *buff_offset, uint32_t dpu_id) {
-    /* Computations must be n divisible unless extra at end */
-    int32_t num_computations = buffer_channel_length / hd.n;
-    int32_t remaining_computations = buffer_channel_length % hd.n;
 
+    uint32_t buffer_channel_lengths[NR_TASKLETS];
+    calculate_buffer_lengths(NR_TASKLETS, buffer_channel_lengths, buffer_channel_length);
+
+    uint32_t loc = 0;
+    uint32_t idx_offset = 0;
     for (uint8_t idx = 0; idx < NR_TASKLETS; idx++) {
-        uint32_t task_begin = 0;
-        uint32_t task_end = 0;
+        input->task_begin[idx] = loc;
+        loc += buffer_channel_lengths[idx];
+        input->task_end[idx] = loc;
 
-        if (num_computations < NR_TASKLETS) {
-            if (num_computations >= (idx + 1)) {
-                task_begin = idx * hd.n;
-                task_end = task_begin + hd.n;
-            } else if (remaining_computations > 0) {
-                task_begin = idx * hd.n;
-                task_end = task_begin + remaining_computations;
-            }
-        } else {
-            uint32_t split_computations = (num_computations / NR_TASKLETS) * hd.n;
-            task_begin = idx * split_computations;
-            task_end = task_begin + split_computations;
+        uint32_t task_samples = input->task_end[idx] - input->task_begin[idx];
 
-            if ((idx + 1) == NR_TASKLETS) {
-                uint32_t task_extra = (num_computations % NR_TASKLETS);
-                task_end += remaining_computations + (task_extra * hd.n);
-            }
-        }
+        input->idx_offset[idx] = idx_offset;
+        idx_offset += task_samples / hd.n;
 
-        input->task_begin[idx] = task_begin;
-        input->task_end[idx] = task_end;
-
-        uint32_t task_samples = input->task_end[0] - input->task_begin[0];
-        input->idx_offset[idx] = (task_samples / hd.n) * idx;
-
+        dbg_printf("%u: samples = %u\n", idx, task_samples);
         dbg_printf("%u: idx_offset = %u\n", idx, input->idx_offset[idx]);
-        dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, task_end, task_begin);
+        dbg_printf("%u: task_end = %u, task_begin = %u\n", idx, input->task_end[idx], input->task_begin[idx]);
     }
 
     /* Input */
@@ -167,36 +183,6 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
 }
 
 /**
- * @brief Calculate individual buffer lengths for each DPU with as even distribution as possible
- * @param[out] buffer_channel_lengths  Lengths for each DPU's channel
- */
-static void
-calculate_buffer_lengths(uint32_t buffer_channel_lengths[NR_DPUS]) {
-    /* Section of buffer for one channel, without samples not divisible by n */
-    uint32_t samples = number_of_input_samples / NR_DPUS;
-    /* Remove samples not divisible by n */
-    uint32_t chunk_size = samples - (samples % hd.n);
-    /* Extra data for last DPU */
-    uint32_t extra_data = number_of_input_samples - (chunk_size * NR_DPUS);
-    uint32_t extra_data_divisible = extra_data / hd.n;
-
-    for (int i = 0; i < NR_DPUS; i++) {
-        buffer_channel_lengths[i] = chunk_size;
-    }
-
-    int i = 0;
-    while (extra_data_divisible != 0) {
-        buffer_channel_lengths[i] += hd.n;
-        extra_data_divisible--;
-        i++;
-        if (i == NR_DPUS) {
-            i = 0;
-        }
-    }
-    buffer_channel_lengths[NR_DPUS - 1] += extra_data % hd.n;
-}
-
-/**
  * @brief Prepare the DPU context and upload the program to the DPU.
  *
  * @param[in]  data_set  Input dataset
@@ -223,7 +209,19 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     uint32_t dpu_id_rank = 0;
 
     uint32_t buffer_channel_lengths[NR_DPUS];
-    calculate_buffer_lengths(buffer_channel_lengths);
+    calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
+
+#ifdef TASK_DISTRIBUTION
+    printf("%s,%s,%s\n", "DPU", "Tasklet", "Samples");
+    for (int i =0; i < NR_DPUS; i++) {
+        ret = setup_dpu_data(&inputs[i], buffer_channel_lengths[i],
+                                 &read_bufs[i], data_set, &buff_offset, i);
+        for (int j = 0; j< NR_TASKLETS; j++) {
+            printf("%d,%d,%d\n", i, j, inputs[i].task_end[j] - inputs[i].task_begin[j]);
+        }
+    }
+    exit(0);
+#endif
 
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
