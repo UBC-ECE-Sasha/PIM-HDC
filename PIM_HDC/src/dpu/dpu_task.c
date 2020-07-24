@@ -41,11 +41,6 @@ uint32_t __mram_noinit mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 uint32_t __mram_noinit mram_chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 #endif
 
-perfcounter_t counter = 0;
-perfcounter_t compute_N_gram_cycles = 0;
-perfcounter_t associative_memory_cycles = 0;
-perfcounter_t bit_mod_cycles = 0;
-
 /**
  * @brief Run HDC algorithm
  * @param[out] result         Buffer to place results in
@@ -81,15 +76,10 @@ dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t t
             // Spatial and Temporal Encoder: computes the N-gram.
             // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
             if (z == 0) {
-                CYCLES_COUNT_START(&counter);
                 compute_N_gram(quantized_buffer, q);
-                CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
             } else {
-                CYCLES_COUNT_START(&counter);
                 compute_N_gram(quantized_buffer, q_N);
-                CYCLES_COUNT_FINISH(counter, &compute_N_gram_cycles);
 
-                CYCLES_COUNT_START(&counter);
                 // Here the hypervector q is shifted by 1 position as permutation,
                 // before performing the componentwise XOR operation with the new query (q_N).
                 int32_t shifted_q;
@@ -108,14 +98,11 @@ dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t t
 
                 shifted_q = (q[0] >> 1) | (overflow << (32 - 1));
                 q[0] = q_N[0] ^ shifted_q;
-                CYCLES_COUNT_FINISH(counter, &bit_mod_cycles);
             }
         }
 
-        CYCLES_COUNT_START(&counter);
         // Classifies the new N-gram through the Associative Memory matrix.
         result[result_offset + result_num] = associative_memory_32bit(q, hd.aM_32);
-        CYCLES_COUNT_FINISH(counter, &associative_memory_cycles);
 
         dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num,
                    result[result_offset + result_num]);
@@ -161,12 +148,6 @@ main() {
 
     perfcounter_t total_cycles = perfcounter_get();
     printf("Tasklet %d: completed in %ld cycles\n", idx, total_cycles);
-    printf("compute_N_gram_cycles used %ld cycles (%f%%)\n", compute_N_gram_cycles,
-           (double) compute_N_gram_cycles / total_cycles);
-    printf("associative_memory_cycles used %ld cycles (%f%%)\n", associative_memory_cycles,
-           (double) associative_memory_cycles / total_cycles);
-    printf("bit_mod used %ld cycles (%f%%)\n", bit_mod_cycles,
-           (double) bit_mod_cycles / total_cycles);
 
     return ret;
 }
