@@ -218,6 +218,12 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
     gettimeofday(&start, NULL);
     calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
+#ifndef CHAM_IN_WRAM
+    uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
+#endif
+#ifndef IM_IN_WRAM
+    uint32_t im_sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
+#endif
     gettimeofday(&end, NULL);
 
     rt->execution_time_prepare = time_difference(&start, &end);
@@ -248,11 +254,28 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
             dbg_printf("%u: buffer_channel_length = %u\n", dpu_id,
                        inputs[dpu_id].buffer_channel_length);
-
+#ifdef BULK_XFER
             DPU_ASSERT(dpu_prepare_xfer(dpu, &hd));
+#else
+            DPU_ASSERT(dpu_copy_to(dpu, "hd", 0, &hd, sizeof(hd)));
+            DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &inputs[dpu_id], sizeof(inputs[dpu_id])));
+            DPU_ASSERT(dpu_copy_to(dpu, "read_buf", 0, read_bufs[dpu_id].buffer,
+                                   read_bufs[dpu_id].buffer_size));
+
+#    ifndef CHAM_IN_WRAM
+            DPU_ASSERT(dpu_copy_to(dpu, "mram_chAM", 0, chAM, ALIGN(cham_sz, 8)));
+#    endif
+
+#    ifndef IM_IN_WRAM
+            DPU_ASSERT(dpu_copy_to(dpu, "mram_iM", 0, iM, ALIGN(im_sz, 8)));
+#    endif
+
+#endif
 
             dpu_id++;
         }
+
+#ifdef BULK_XFER
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "hd", 0, sizeof(hd), DPU_XFER_DEFAULT));
 
         dpu_id = dpu_id_rank;
@@ -263,25 +286,22 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "dpu_data", 0, sizeof(inputs[dpu_id]),
                                  DPU_XFER_DEFAULT));
 
-#ifndef CHAM_IN_WRAM
+#    ifndef CHAM_IN_WRAM
         dpu_id = dpu_id_rank;
-        uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
-        ;
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, chAM));
         }
         DPU_ASSERT(
             dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_chAM", 0, cham_sz, DPU_XFER_DEFAULT));
-#endif
+#    endif
 
-#ifndef IM_IN_WRAM
+#    ifndef IM_IN_WRAM
         dpu_id = dpu_id_rank;
-        uint32_t im_sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
         DPU_FOREACH(dpu_rank, dpu) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
         }
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, im_sz, DPU_XFER_DEFAULT));
-#endif
+#    endif
 
         dpu_id = dpu_id_rank;
 
@@ -296,6 +316,7 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         }
         DPU_ASSERT(
             dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "read_buf", 0, largest, DPU_XFER_DEFAULT));
+#endif
 
         dpu_id_rank = dpu_id;
     }
@@ -317,29 +338,34 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     // Copy out:
     DPU_RANK_FOREACH(dpus, dpu_rank) {
         dpu_id = dpu_id_rank;
-
+#ifdef BULK_XFER
         uint32_t largest_size_xfer = 0;
+#endif
+
         DPU_FOREACH(dpu_rank, dpu) {
 #ifdef SHOW_DPU_LOGS
             printf("------DPU %d Logs------\n", dpu_id);
             DPU_ASSERT(dpu_log_read(dpu, stdout));
 #endif
+
             uint32_t size_xfer = inputs[dpu_id].output_buffer_length * sizeof(int32_t);
+#ifdef BULK_XFER
             if (size_xfer > largest_size_xfer) {
                 largest_size_xfer = size_xfer;
             }
             DPU_ASSERT(dpu_prepare_xfer(dpu, output_buffer[dpu_id]));
-
+#else
+            DPU_ASSERT(dpu_copy_from(dpu, "read_buf", 0, output_buffer[dpu_id], size_xfer));
+#endif
             dpu_id++;
         }
 
+#ifdef BULK_XFER
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer,
                                  DPU_XFER_DEFAULT));
-
+#endif
         dpu_id_rank = dpu_id;
     }
-
-
 
     uint32_t result_num = 0;
     for (dpu_id = 0; dpu_id < NR_DPUS; dpu_id++) {
@@ -355,7 +381,6 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     gettimeofday(&end, NULL);
 
     rt->execution_time_copy_out = time_difference(&start, &end);
-
 
     gettimeofday(&start, NULL);
     // Deallocate the DPUs
@@ -640,12 +665,19 @@ main(int argc, char **argv) {
                 print_results(&dpu_results);
             }
             printf("DPU took %fs\n", dpu_results.execution_time);
+            printf("DPU prepare took %fs\n", runtime.execution_time_prepare);
+            printf("DPU load took %fs\n", runtime.execution_time_load);
+            printf("DPU alloc took %fs\n", runtime.execution_time_alloc);
             printf("DPU copy_in took %fs\n", runtime.execution_time_copy_in);
             printf("DPU launch took %fs\n", runtime.execution_time_launch);
             printf("DPU copy_out took %fs\n", runtime.execution_time_copy_out);
+            printf("DPU free took %fs\n", runtime.execution_time_free);
         } else {
-            printf("%f,%f,%f,%f,%f,%f,%f,%f\n", dpu_results.execution_time, runtime.execution_time_prepare, runtime.execution_time_load, runtime.execution_time_alloc, runtime.execution_time_copy_in,
-                   runtime.execution_time_launch, runtime.execution_time_copy_out, runtime.execution_time_free);
+            printf("%f,%f,%f,%f,%f,%f,%f,%f\n", dpu_results.execution_time,
+                   runtime.execution_time_prepare, runtime.execution_time_load,
+                   runtime.execution_time_alloc, runtime.execution_time_copy_in,
+                   runtime.execution_time_launch, runtime.execution_time_copy_out,
+                   runtime.execution_time_free);
         }
     }
 

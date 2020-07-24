@@ -13,10 +13,16 @@ ifeq ($(TEST), 1)
 endif
 
 SHOW_DPU_LOGS ?= 1
+BULK_XFER ?= 1
 
 # define SHOW_DPU_LOGS in the source if we want DPU logs
 ifeq ($(SHOW_DPU_LOGS), 1)
 	CFLAGS+=-DSHOW_DPU_LOGS
+endif
+
+# define BULK_XFER if we want to use bulk transfers
+ifeq ($(BULK_XFER), 1)
+	CFLAGS+=-DBULK_XFER
 endif
 
 IM_IN_WRAM ?= 0
