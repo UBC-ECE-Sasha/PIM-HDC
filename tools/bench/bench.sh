@@ -6,7 +6,7 @@ set -e
 #     MIN_DPU MAX_DPU MIN_TASKLET MAX_TASKLET [ DPU_INTERVAL ]
 #
 # eg:
-#     ./bench.sh -i large-data.h 32 64 1 5 2
+#     ./bench.sh -i large-data.bin 32 64 1 5 2
 
 dpu_interval=1
 dpu_only=0
@@ -16,8 +16,10 @@ min_tasklet=""
 max_tasklet=""
 input=""
 
+export SHOW_DPU_LOGS=0
+
 bench() {
-    printf "Host,DPU,NR_TASKLETS,NR_DPUS\n"
+    printf "Host,DPU,PREPARE,DPU_LOAD,DPU_ALLOC,COPY_IN,DPU_RUN,COPY_OUT,DPU_FREE,NR_TASKLETS,NR_DPUS\n"
     for d in $(seq "${min_dpu}" "${dpu_interval}" "${max_dpu}"); do
         export NR_DPUS="${d}"
         for t in $(seq "${min_tasklet}" "${max_tasklet}"); do

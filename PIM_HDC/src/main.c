@@ -21,9 +21,13 @@
  * @brief DPU execution times
  */
 typedef struct dpu_runtime {
+    double execution_time_prepare;
+    double execution_time_load;
+    double execution_time_alloc;
     double execution_time_copy_in;
     double execution_time_launch;
     double execution_time_copy_out;
+    double execution_time_free;
 } dpu_runtime;
 
 /**
@@ -211,28 +215,28 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     uint32_t dpu_id_rank = 0;
 
     uint32_t buffer_channel_lengths[NR_DPUS];
-    calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
-
-#ifdef TASK_DISTRIBUTION
-    printf("%s,%s,%s\n", "DPU", "Tasklet", "Samples");
-    for (int i = 0; i < NR_DPUS; i++) {
-        ret = setup_dpu_data(&inputs[i], buffer_channel_lengths[i], &read_bufs[i], data_set,
-                             &buff_offset, i);
-        for (int j = 0; j < NR_TASKLETS; j++) {
-            printf("%d,%d,%d\n", i, j, inputs[i].task_end[j] - inputs[i].task_begin[j]);
-        }
-    }
-    exit(0);
-#endif
-
-    // Allocate DPUs
-    DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
-    DPU_ASSERT(dpu_load(dpus, DPU_PROGRAM, NULL));
 
     gettimeofday(&start, NULL);
+    calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_prepare = time_difference(&start, &end);
+
+    gettimeofday(&start, NULL);
+    // Allocate DPUs
+    DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_alloc = time_difference(&start, &end);
+
+    gettimeofday(&start, NULL);
+    DPU_ASSERT(dpu_load(dpus, DPU_PROGRAM, NULL));
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_load = time_difference(&start, &end);
 
     // Copy in:
-
+    gettimeofday(&start, NULL);
     DPU_RANK_FOREACH(dpus, dpu_rank) {
         dpu_id = dpu_id_rank;
         DPU_FOREACH(dpu_rank, dpu) {
@@ -335,9 +339,7 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         dpu_id_rank = dpu_id;
     }
 
-    gettimeofday(&end, NULL);
 
-    rt->execution_time_copy_out = time_difference(&start, &end);
 
     uint32_t result_num = 0;
     for (dpu_id = 0; dpu_id < NR_DPUS; dpu_id++) {
@@ -350,8 +352,18 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         fprintf(stderr, "%s\nReturn code (%d)\n", "Failure occurred during DPU run.", ret);
     }
 
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_copy_out = time_difference(&start, &end);
+
+
+    gettimeofday(&start, NULL);
     // Deallocate the DPUs
     DPU_ASSERT(dpu_free(dpus));
+
+    gettimeofday(&end, NULL);
+
+    rt->execution_time_free = time_difference(&start, &end);
 
     return ret;
 }
@@ -632,8 +644,8 @@ main(int argc, char **argv) {
             printf("DPU launch took %fs\n", runtime.execution_time_launch);
             printf("DPU copy_out took %fs\n", runtime.execution_time_copy_out);
         } else {
-            printf("%f,%f,%f,%f\n", dpu_results.execution_time, runtime.execution_time_copy_in,
-                   runtime.execution_time_launch, runtime.execution_time_copy_out);
+            printf("%f,%f,%f,%f,%f,%f,%f,%f\n", dpu_results.execution_time, runtime.execution_time_prepare, runtime.execution_time_load, runtime.execution_time_alloc, runtime.execution_time_copy_in,
+                   runtime.execution_time_launch, runtime.execution_time_copy_out, runtime.execution_time_free);
         }
     }
 
