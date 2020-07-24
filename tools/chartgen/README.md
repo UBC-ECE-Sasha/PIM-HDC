@@ -28,7 +28,7 @@ optional arguments:
   --ystepsize YSTEPSIZE
                         Chart y-axis stepsize
   --title TITLE         Chart title
-  --nohost              Chart title
+  --nohost              Do not include host
   --outputfile OUTPUTFILE
                         Output chart
   --type TYPE           Chart type (splitbar or line)

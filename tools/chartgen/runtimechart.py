@@ -165,13 +165,13 @@ def parse_args() -> argparse.Namespace:
         "--title", help="Chart title", default="PIM-HDC Runtimes", type=str
     )
     parser.add_argument(
-        "--nohost", help="Chart title", action="store_true", default=False
+        "--nohost", help="Do not include host", action="store_true", default=False
     )
     parser.add_argument(
         "--outputfile", help="Output chart", default="output.png", type=str
     )
     parser.add_argument(
-        "--type", help="Chart type (splitbar or line)", default="line", type=str
+        "--type", help="Chart type (bar or line)", default="line", type=str
     )
     parser.add_argument(
         "--includetasklet",
