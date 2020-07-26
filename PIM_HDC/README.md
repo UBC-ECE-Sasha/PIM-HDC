@@ -2,6 +2,43 @@
 
 Hyperdimensional computing accelerator using processing in-memory.
 
+## Usage
+
+```text
+usage: ./pim_hdc [ -d ] -i <INPUT_FILE>
+        d: use DPU
+        i: input file
+        r: show runtime only
+        s: show results
+        t: test results      - Compare host against DPU
+        h: help message
+```
+
+Example: Run HDC on DPU and host and verify they are the same:
+
+```shell script
+./pim_hdc -i data/large-data.bin -t
+```
+
+## Compile options
+
+The following are compile time settable options and their defaults:
+
+* `NR_DPUS = 32`
+* `NR_TASKLETS = 1`
+
+* `SHOW_DPU_LOGS = 1` - Print DPU logs to `stdout`
+* `BULK_XFER = 1`     - Use bulk transfers to read and write data to DPU
+
+The following should not be reduced unless a non-default dataset is used,
+and they already represent the exact data sizes:
+
+* `MAX_BIT_DIM = 313`
+* `MAX_CHANNELS = 4`
+* `MAX_N = 5`
+* `MAX_IM_LENGTH = 22`
+* `MAX_INPUT = 384`
+
 ## Implementation
 
 The following is a high-level description of the hyperdimensional accelerator.
@@ -10,7 +47,23 @@ The following is a high-level description of the hyperdimensional accelerator.
 
    * A item memory (IM) maps all symbols in the system to the HD space.
 
-     IM is defined in `data.h` as `uint32_t iM[][BIT_DIM + 1]`. It is pre-computed.
+     In the case where `iM` is kept in MRAM (the default), it is defined in in [src/dpu/dpu_task.c](src/dpu/dpu_task.c).
+
+     When kept in WRAM, IM is defined in [include/init.h](include/init.h):
+
+     IM can be thought of as a multi-dimensional array:
+
+     ```C
+     uint32_t iM[MAX_IM_LENGTH][MAX_BIT_DIM + 1];
+     ```
+
+     For ease-of-use with the DPU, it is kept in the form of a single dimensional array:
+
+     ```C
+     uint32_t iM[MAX_IM_LENGTH * MAX_BIT_DIM + 1)];
+     ```
+
+     It is pre-computed.
 
      The IM assigns a random hypervectors (with i.i.d. components) to every channel's name.
 
@@ -18,7 +71,23 @@ The following is a high-level description of the hyperdimensional accelerator.
 
    * A continuous item memory (CIM) extends the notion of item memory to analog values (e.g., the signal levels of channels) for mapping.
 
-     CIM is defined in `data.h` as `uint32_t chM[CHANNELS][BIT_DIM + 1]`. It is pre-computed.
+     In the case where CIM is kept in MRAM (the default), it is defined in in [src/dpu/dpu_task.c](src/dpu/dpu_task.c).
+
+     When kept in WRAM, CIM is defined in [include/init.h](include/init.h):
+
+     CIM can be thought of as a multi-dimensional array:
+
+     ```C
+     uint32_t chAM[MAX_CHANNELS][MAX_BIT_DIM + 1]
+     ```
+
+     For ease-of-use with the DPU, it is kept in the form of a single dimensional array:
+
+     ```C
+     uint32_t chAM[MAX_CHANNELS * MAX_BIT_DIM + 1)]
+     ```
+
+     It is pre-computed.
 
      In the continuous vector space of CIM, orthogonal endpoint hypervectors are generated for the minimum and maximum signal levels.
 

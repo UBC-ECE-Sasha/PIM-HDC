@@ -567,7 +567,7 @@ usage(FILE *stream, char const *exe_name) {
     fprintf(stream, "**DEBUG BUILD**\n");
 #endif
 
-    fprintf(stream, "usage: %s -d -i <INPUT_FILE>\n", exe_name);
+    fprintf(stream, "usage: %s [ -d ] -i <INPUT_FILE>\n", exe_name);
     fprintf(stream, "\td: use DPU\n");
     fprintf(stream, "\ti: input file\n");
     fprintf(stream, "\tr: show runtime only\n");
