@@ -416,10 +416,6 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
 
     int result_num = 0;
 
-    memset(q, 0, (hd.bit_dim + 1) * sizeof(uint32_t));
-    memset(q_N, 0, (hd.bit_dim + 1) * sizeof(uint32_t));
-    memset(quantized_buffer, 0, hd.channels * sizeof(uint32_t));
-
     for (int ix = 0; ix < number_of_input_samples; ix += hd.n) {
 
         for (int z = 0; z < hd.n; z++) {
