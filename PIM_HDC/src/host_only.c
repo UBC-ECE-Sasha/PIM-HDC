@@ -6,6 +6,10 @@
 #include <stdlib.h>
 
 dpu_hdc_vars hd;
+
+// Number of samples stored in each channel in the dataset
+// In the test data sets, these are EMG samples which have been
+// sampled at a rate of 500 Hertz
 int32_t number_of_input_samples;
 
 #ifndef IM_IN_WRAM
