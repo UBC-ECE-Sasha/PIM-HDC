@@ -9,11 +9,7 @@
 #include <barrier.h>
 #include <built_ins.h>
 #include <defs.h>
-#include <errno.h>
-#include <handshake.h>
-#include <mram.h>
 #include <perfcounter.h>
-#include <seqread.h>
 #include <stdio.h>
 #include <string.h>
 

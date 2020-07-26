@@ -1,13 +1,9 @@
 #include "aux_functions.h"
-
 #include "common.h"
-#include "cycle_counter.h"
 #include "global_dpu.h"
 
-#include <alloc.h>
 #include <built_ins.h>
 #include <mram.h>
-#include <mutex.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -60,7 +56,7 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
  * @return                32bit read from @p mram_buf
  */
 static uint32_t
-read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr * mram_buf) {
+read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr *mram_buf) {
     __dma_aligned uint32_t buf[MINIMUM_MRAM_32B_READ];
     mram_read(&mram_buf[ind], buf, MINIMUM_MRAM_32B_READ * sizeof(uint32_t));
 
@@ -105,9 +101,8 @@ compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
 
         // this is done to make the dimension of the matrix for the componentwise majority odd.
         chHV[hd.channels] = chHV[0] ^ chHV[1];
-        
-        // componentwise majority: insert the value of the ith bit of each chHV row in the variable
-        // "majority" and then compute the number of 1's
+
+        // componentwise majority: compute the number of 1's
         for (int z = 31; z >= 0; z--) {
             uint32_t cnt = 0;
             for (int j = 0; j < hd.channels + 1; j++) {

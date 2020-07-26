@@ -4,7 +4,6 @@
 #include "host_only.h"
 #include "init.h"
 
-#include <assert.h>
 #include <dpu.h>
 #include <dpu_log.h>
 #include <dpu_memory.h>
