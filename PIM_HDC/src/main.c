@@ -647,10 +647,16 @@ main(int argc, char **argv) {
 
     if (use_dpu || test_results) {
         dpu_ret = run_hdc(prepare_dpu, &dpu_results, &runtime);
+        if (dpu_ret != 0) {
+            goto err;
+        }
     }
 
     if (!use_dpu || test_results) {
         host_ret = run_hdc(host_hdc, &host_results, NULL);
+        if (host_ret != 0) {
+            goto err;
+        }
     }
 
     if (use_dpu || test_results) {
@@ -692,6 +698,7 @@ main(int argc, char **argv) {
         ret = compare_results(&dpu_results, &host_results, runtime_only);
     }
 
+err:
     free(data_set);
     free(test_set);
     free(host_results.results);
