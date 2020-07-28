@@ -23,7 +23,7 @@ CFLAGS += -DMAX_BIT_DIM=$(MAX_BIT_DIM) -DMAX_CHANNELS=$(MAX_CHANNELS)
 CFLAGS += -DMAX_N=$(MAX_N) -DMAX_IM_LENGTH=$(MAX_IM_LENGTH)
 CFLAGS += -DMAX_INPUT=$(MAX_INPUT)
 
-SOURCES = $(wildcard *.c) $(wildcard hdc/*.c)
+SOURCES = $(wildcard *.c) $(wildcard ../hdc/*.c)
 HDC_DPU = hdc.dpu
 
 INC=-I../../include  -I../../PIM-common/common/include

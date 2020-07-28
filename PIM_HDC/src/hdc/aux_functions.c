@@ -1,10 +1,40 @@
 #include "aux_functions.h"
 
-#include "host_only.h"
+#ifdef HOST
+#    include "host_only.h"
+#else
+
+#    include "common.h"
+#    include "global_dpu.h"
+
+#    include <built_ins.h>
+#    include <mram.h>
+#    include <stdio.h>
+
+#    define MINIMUM_MRAM_32B_READ 2
+#endif
 
 #include <string.h>
 
 #define BUILTIN_CAO
+
+/**
+ * @brief Tests the accuracy based on input testing queries.
+ *
+ * @param[in] q_32  Query hypervector
+ * @param[in] aM_32 Trained associative memory
+ * @return          Classification result
+ */
+int
+associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
+    int sims[CLASSES] = {0};
+
+    // Computes Hamming Distances
+    hamming_dist(q_32, aM_32, sims);
+
+    // Classification with Hamming Metric
+    return max_dist_hamm(sims);
+}
 
 /**
  * @brief Computes the maximum Hamming Distance.
@@ -44,6 +74,58 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
     }
 }
 
+#ifndef HOST
+/**
+ * @brief Read 32 bits from MRAM
+ *
+ * @param[in] ind         Read index
+ * @param[in] mram_buf    MRAM array to read from at @p ind
+ * @return                32bit read from @p mram_buf
+ */
+static uint32_t
+read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr *mram_buf) {
+    __dma_aligned uint32_t buf[MINIMUM_MRAM_32B_READ];
+    mram_read(&mram_buf[ind], buf, MINIMUM_MRAM_32B_READ * sizeof(uint32_t));
+
+    /* Data will be offset if the data address is not 8 byte aligned */
+    return buf[(ind % 2) != 0];
+}
+#endif
+
+/**
+ * @brief Read from im
+ * @param[in] im_ind    im array index
+ */
+static inline uint32_t
+read_im(uint32_t im_ind) {
+#ifdef IM_IN_WRAM
+    return hd.iM[im_ind];
+#endif
+
+#ifdef HOST
+    return iM[im_ind];
+#else
+    return read_32bits_from_mram(im_ind, mram_iM);
+#endif
+}
+
+/**
+ * @brief Read from cham
+ * @param[in] cham_ind    cham array index
+ */
+static inline uint32_t
+read_cham(uint32_t cham_ind) {
+#ifdef IM_IN_WRAM
+    return hd.chAM[cham_ind];
+#endif
+
+#ifdef HOST
+    return chAM[cham_ind];
+#else
+    return read_32bits_from_mram(cham_ind, mram_chAM);
+#endif
+}
+
 /**
  * @brief Computes the N-gram.
  *
@@ -53,26 +135,15 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
 void
 compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
 
-    uint32_t chHV[hd.channels + 1];
+    uint32_t chHV[MAX_CHANNELS + 1];
 
     for (int i = 0; i < hd.bit_dim + 1; i++) {
         query[i] = 0;
         for (int j = 0; j < hd.channels; j++) {
             int ix = input[j];
-            uint32_t im;
-            uint32_t cham;
 
-#ifdef IM_IN_WRAM
-            im = hd.iM[A2D1D(hd.bit_dim + 1, ix, i)];
-#else
-            im = iM[A2D1D(hd.bit_dim + 1, ix, i)];
-#endif
-
-#ifdef CHAM_IN_WRAM
-            cham = hd.chAM[A2D1D(hd.bit_dim + 1, j, i)];
-#else
-            cham = chAM[A2D1D(hd.bit_dim + 1, j, i)];
-#endif
+            uint32_t im = read_im(A2D1D(hd.bit_dim + 1, ix, i));
+            uint32_t cham = read_cham(A2D1D(hd.bit_dim + 1, j, i));
 
             chHV[j] = im ^ cham;
         }

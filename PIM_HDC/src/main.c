@@ -1,4 +1,3 @@
-#include "associative_memory.h"
 #include "aux_functions.h"
 #include "common.h"
 #include "host_only.h"

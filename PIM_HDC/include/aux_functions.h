@@ -9,6 +9,9 @@
 #    include "global_dpu.h"
 #endif
 
+int
+associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32);
+
 void
 hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]);
 
