@@ -1,5 +1,6 @@
 #include "aux_functions.h"
 #include "common.h"
+#include "host.h"
 #include "host_only.h"
 #include "init.h"
 
@@ -10,9 +11,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/time.h>
+#include <time.h>
 
 #define DPU_PROGRAM "src/dpu/hdc.dpu"
+
+#define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
 /**
  * @struct dpu_runtime
@@ -53,20 +56,6 @@ typedef struct in_buffer {
  * @brief Function for @p run_hdc to run HDC task
  */
 typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
-
-/**
- * @brief Calculate the difference between @p start and @p end
- * @param[in] start  Start time of task
- * @param[in] end    End time of task
- *
- * @return           Time difference between start and end (seconds)
- */
-static double
-time_difference(struct timeval *start, struct timeval *end) {
-    double start_time = start->tv_sec + start->tv_usec / 1000000.0;
-    double end_time = end->tv_sec + end->tv_usec / 1000000.0;
-    return (end_time - start_time);
-}
 
 /**
  * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as
@@ -199,7 +188,7 @@ static int
 prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     int ret = 0;
 
-    struct timeval start, end;
+    struct timespec start, end;
     struct dpu_set_t dpus, dpu, dpu_rank;
 
     dpu_runtime *rt = runtime;
@@ -214,7 +203,7 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
     uint32_t buffer_channel_lengths[NR_DPUS];
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
 #ifndef CHAM_IN_WRAM
     uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
@@ -222,25 +211,25 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 #ifndef IM_IN_WRAM
     uint32_t im_sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
 #endif
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_prepare = time_difference(&start, &end);
+    rt->execution_time_prepare = TIME_DIFFERENCE(start, end);
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     // Allocate DPUs
     DPU_ASSERT(dpu_alloc(NR_DPUS, NULL, &dpus));
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_alloc = time_difference(&start, &end);
+    rt->execution_time_alloc = TIME_DIFFERENCE(start, end);
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     DPU_ASSERT(dpu_load(dpus, DPU_PROGRAM, NULL));
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_load = time_difference(&start, &end);
+    rt->execution_time_load = TIME_DIFFERENCE(start, end);
 
     // Copy in:
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     DPU_RANK_FOREACH(dpus, dpu_rank) {
         dpu_id = dpu_id_rank;
         DPU_FOREACH(dpu_rank, dpu) {
@@ -319,17 +308,17 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         dpu_id_rank = dpu_id;
     }
 
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_copy_in = time_difference(&start, &end);
+    rt->execution_time_copy_in = TIME_DIFFERENCE(start, end);
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     ret = dpu_launch(dpus, DPU_SYNCHRONOUS);
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_launch = time_difference(&start, &end);
+    rt->execution_time_launch = TIME_DIFFERENCE(start, end);
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     uint32_t output_buffer[NR_DPUS][MAX_INPUT];
     dpu_id_rank = dpu_id = 0;
 
@@ -376,17 +365,16 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
         fprintf(stderr, "%s\nReturn code (%d)\n", "Failure occurred during DPU run.", ret);
     }
 
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    rt->execution_time_copy_out = time_difference(&start, &end);
+    rt->execution_time_copy_out = TIME_DIFFERENCE(start, end);
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     // Deallocate the DPUs
     DPU_ASSERT(dpu_free(dpus));
+    TIME_NOW(&end);
 
-    gettimeofday(&end, NULL);
-
-    rt->execution_time_free = time_difference(&start, &end);
+    rt->execution_time_free = TIME_DIFFERENCE(start, end);
 
     return ret;
 }
@@ -470,8 +458,7 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
  */
 static double
 run_hdc(hdc fn, hdc_data *data, void *runtime) {
-    struct timeval start;
-    struct timeval end;
+    struct timespec start, end;
 
     int ret = 0;
 
@@ -483,11 +470,11 @@ run_hdc(hdc fn, hdc_data *data, void *runtime) {
         nomem();
     }
 
-    gettimeofday(&start, NULL);
+    TIME_NOW(&start);
     ret = fn(data->data_set, data->results, runtime);
-    gettimeofday(&end, NULL);
+    TIME_NOW(&end);
 
-    data->execution_time = time_difference(&start, &end);
+    data->execution_time = TIME_DIFFERENCE(start, end);
 
     return ret;
 }

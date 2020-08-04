@@ -52,6 +52,9 @@ CFLAGS += -DMAX_BIT_DIM=$(MAX_BIT_DIM) -DMAX_CHANNELS=$(MAX_CHANNELS)
 CFLAGS += -DMAX_N=$(MAX_N) -DMAX_IM_LENGTH=$(MAX_IM_LENGTH)
 CFLAGS += -DMAX_INPUT=$(MAX_INPUT)
 
+# For clock_gettime
+CFLAGS += -D_POSIX_C_SOURCE=199309L
+
 .PHONY: default all clean
 
 default: $(TARGET) dpu
@@ -60,7 +63,7 @@ all: default
 SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c)
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
-INC=-Iinclude -IPIM-common/common/include
+INC=-Iinclude -IPIM-common/common/include -IPIM-common/host/include
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS)  $(INC) -c $< -o $@ $(DPU_OPTS)
