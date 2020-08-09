@@ -24,7 +24,7 @@ BARRIER_INIT(finish_barrier, NR_TASKLETS);
 __host dpu_input_data dpu_data;
 __host dpu_hdc_vars hd;
 
-__host int32_t read_buf[MAX_INPUT];
+__host int32_t read_buf[HDC_MAX_INPUT];
 __dma_aligned int32_t *output;
 
 // MRAM

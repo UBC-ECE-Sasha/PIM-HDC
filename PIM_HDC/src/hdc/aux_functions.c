@@ -100,9 +100,7 @@ static inline uint32_t
 read_im(uint32_t im_ind) {
 #ifdef IM_IN_WRAM
     return hd.iM[im_ind];
-#endif
-
-#ifdef HOST
+#elif defined (HOST)
     return iM[im_ind];
 #else
     return read_32bits_from_mram(im_ind, mram_iM);
@@ -117,9 +115,7 @@ static inline uint32_t
 read_cham(uint32_t cham_ind) {
 #ifdef IM_IN_WRAM
     return hd.chAM[cham_ind];
-#endif
-
-#ifdef HOST
+#elif defined (HOST)
     return chAM[cham_ind];
 #else
     return read_32bits_from_mram(cham_ind, mram_chAM);

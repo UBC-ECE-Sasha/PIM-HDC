@@ -48,7 +48,7 @@ typedef struct hdc_data {
  * @brief   Input buffer for a DPU
  */
 typedef struct in_buffer {
-    int32_t buffer[MAX_INPUT];
+    int32_t buffer[HDC_MAX_INPUT];
     size_t buffer_size;
 } in_buffer;
 
@@ -136,11 +136,11 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     }
     input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
-    if ((input->buffer_channel_usable_length * hd.channels) > MAX_INPUT) {
+    if ((input->buffer_channel_usable_length * hd.channels) > HDC_MAX_INPUT) {
         fprintf(stderr,
-                "buffer_channel_usable_length * hd.channels (%u) cannot be greater than MAX_INPUT "
+                "buffer_channel_usable_length * hd.channels (%u) cannot be greater than HDC_MAX_INPUT "
                 "= (%d)\n",
-                input->buffer_channel_usable_length * hd.channels, MAX_INPUT);
+                input->buffer_channel_usable_length * hd.channels, HDC_MAX_INPUT);
         return -1;
     }
 
@@ -166,9 +166,9 @@ setup_dpu_data(dpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     *buff_offset += input->buffer_channel_length;
 
     size_t total_xfer = 0;
-    if (total_xfer > (MAX_INPUT * sizeof(int32_t))) {
+    if (total_xfer > (HDC_MAX_INPUT * sizeof(int32_t))) {
         fprintf(stderr, "Error %lu is too large for read_buf[%d]\n", total_xfer / sizeof(int32_t),
-                MAX_INPUT);
+                HDC_MAX_INPUT);
         return -1;
     }
 
@@ -319,7 +319,7 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     rt->execution_time_launch = TIME_DIFFERENCE(start, end);
 
     TIME_NOW(&start);
-    uint32_t output_buffer[NR_DPUS][MAX_INPUT];
+    uint32_t output_buffer[NR_DPUS][HDC_MAX_INPUT];
     dpu_id_rank = dpu_id = 0;
 
     // Copy out:
