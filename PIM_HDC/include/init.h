@@ -49,7 +49,9 @@ typedef struct dpu_hdc_vars {
 #ifdef IM_IN_WRAM
     uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)]; /**< Item memory */
 #endif
-    uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)]; /**< Associative memory */
+#ifdef AM_IN_WRAM
+    uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];      /**< Associative memory */
+#endif
 } dpu_hdc_vars;
 
 #endif // INIT_H_

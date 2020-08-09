@@ -18,6 +18,16 @@ input=""
 
 export SHOW_DPU_LOGS=0
 
+dpu_only_command() {
+  # Replace as needed
+  ./pim_hdc -d -i "${input}" -r
+}
+
+dpu_host_command() {
+  # Replace as needed
+  ./pim_hdc -d -i "${input}" -t -r
+}
+
 bench() {
     printf "Host,DPU,PREPARE,DPU_LOAD,DPU_ALLOC,COPY_IN,DPU_RUN,COPY_OUT,DPU_FREE,NR_TASKLETS,NR_DPUS\n"
     for d in $(seq "${min_dpu}" "${dpu_interval}" "${max_dpu}"); do
@@ -27,10 +37,10 @@ bench() {
 
             make clean >/dev/null && make >/dev/null
             if [ "${dpu_only}" -eq 1 ]; then
-                out="$(./pim_hdc -d -i "${input}" -r)"
+                out="$(dpu_only_command)"
                 host_runtime="0"
             else
-                out="$(./pim_hdc -d -i "${input}" -t -r)"
+                out="$(dpu_host_command)"
                 host_runtime="$(echo "${out}" | sed -n 2p)"
             fi
             dpu_runtime="$(echo "${out}" | sed -n 1p)"

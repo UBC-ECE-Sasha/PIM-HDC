@@ -27,6 +27,9 @@ __host dpu_hdc_vars hd;
 __host int32_t read_buf[HDC_MAX_INPUT];
 __dma_aligned int32_t *output;
 
+// in_buffer_context readers[NR_TASKLETS];
+in_buffer_context reader;
+
 // MRAM
 #ifndef IM_IN_WRAM
 uint32_t __mram_noinit mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
@@ -34,6 +37,10 @@ uint32_t __mram_noinit mram_iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 
 #ifndef CHAM_IN_WRAM
 uint32_t __mram_noinit mram_chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
+#endif
+
+#ifndef AM_IN_WRAM
+uint32_t __mram_noinit mram_aM_32[MAX_N * (MAX_BIT_DIM + 1)];
 #endif
 
 /**
@@ -97,7 +104,7 @@ dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t t
         }
 
         // Classifies the new N-gram through the Associative Memory matrix.
-        result[result_offset + result_num] = associative_memory_32bit(q, hd.aM_32);
+        result[result_offset + result_num] = associative_memory_32bit(q);
 
         dbg_printf("%u: result[%d] = %d\n", me(), result_offset + result_num,
                    result[result_offset + result_num]);
@@ -124,6 +131,13 @@ main() {
     uint32_t out_size = ALIGN(dpu_data.output_buffer_length * sizeof(int32_t), 8);
     if (idx == TASKLET_SETUP) {
         output = mem_alloc(out_size);
+#ifndef AM_IN_WRAM
+        reader.cache = seqread_alloc();
+        reader.ptr = seqread_init(reader.cache, mram_aM_32, &reader.sr);
+        reader.curr = 0;
+        reader.length = hd.n * (hd.bit_dim + 1);
+        reader.mram_addr = mram_aM_32;
+#endif
     }
 
     barrier_wait(&start_barrier);

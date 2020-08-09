@@ -6,12 +6,15 @@
 
 #    include "common.h"
 #    include "global_dpu.h"
+#    include "read_helper.h"
 
 #    include <built_ins.h>
+#    include <mutex.h>
 #    include <mram.h>
 #    include <stdio.h>
 
 #    define MINIMUM_MRAM_32B_READ 2
+    MUTEX_INIT(reader_lock);
 #endif
 
 #include <string.h>
@@ -26,11 +29,11 @@
  * @return          Classification result
  */
 int
-associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
+associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1]) {
     int sims[CLASSES] = {0};
 
     // Computes Hamming Distances
-    hamming_dist(q_32, aM_32, sims);
+    hamming_dist(q_32, sims);
 
     // Classification with Hamming Metric
     return max_dist_hamm(sims);
@@ -58,6 +61,21 @@ max_dist_hamm(int distances[CLASSES]) {
 }
 
 /**
+ * @brief Read from AM
+ * @param[in] am_ind    AM array index
+ */
+static inline uint32_t
+read_am_32(uint32_t am_ind) {
+#ifdef AM_IN_WRAM
+    return hd.aM_32[am_ind];
+#elif defined (HOST)
+    return aM_32[am_ind];
+#else
+    return read_uint32(&reader);
+#endif
+}
+
+/**
  * @brief Computes the Hamming Distance for each class.
  *
  * @param[in] q     Query hypervector
@@ -65,13 +83,19 @@ max_dist_hamm(int distances[CLASSES]) {
  * @param[out] sims Distances' vector
  */
 void
-hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
+hamming_dist(uint32_t q[hd.bit_dim + 1], int sims[CLASSES]) {
+#if !defined(HOST) && !defined(AM_IN_WRAM)
+    mutex_lock(reader_lock);
+#endif
     for (int i = 0; i < CLASSES; i++) {
         sims[i] = 0;
         for (int j = 0; j < hd.bit_dim + 1; j++) {
-            sims[i] += number_of_set_bits(q[j] ^ aM[A2D1D(hd.bit_dim + 1, i, j)]);
+            sims[i] += number_of_set_bits(q[j] ^ read_am_32(A2D1D(hd.bit_dim + 1, i, j)));
         }
     }
+#if !defined(HOST) && !defined(AM_IN_WRAM)
+    mutex_unlock(reader_lock);
+#endif
 }
 
 #ifndef HOST

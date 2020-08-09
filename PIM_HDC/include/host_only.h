@@ -18,6 +18,10 @@ extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 extern uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 #endif
 
+#ifndef AM_IN_WRAM
+extern uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)];
+#endif
+
 int
 read_data(char const *input_file, double **test_set);
 int

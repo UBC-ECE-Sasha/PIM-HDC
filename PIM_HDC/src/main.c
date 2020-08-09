@@ -206,10 +206,13 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     TIME_NOW(&start);
     calculate_buffer_lengths(NR_DPUS, buffer_channel_lengths, number_of_input_samples);
 #ifndef CHAM_IN_WRAM
-    uint32_t cham_sz = hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t);
+    uint32_t cham_sz = ALIGN(hd.channels * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
 #endif
 #ifndef IM_IN_WRAM
-    uint32_t im_sz = hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t);
+    uint32_t im_sz = ALIGN(hd.im_length * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
+#endif
+#ifndef AM_IN_WRAM
+    uint32_t am_sz = ALIGN(hd.n * (hd.bit_dim + 1) * sizeof(uint32_t), 8);
 #endif
     TIME_NOW(&end);
 
@@ -257,6 +260,10 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
             DPU_ASSERT(dpu_copy_to(dpu, "mram_iM", 0, iM, ALIGN(im_sz, 8)));
 #    endif
 
+#    ifndef AM_IN_WRAM
+            DPU_ASSERT(dpu_copy_to(dpu, "mram_aM_32", 0, aM_32, ALIGN(am_sz, 8)));
+#    endif
+
 #endif
 
             dpu_id++;
@@ -288,6 +295,14 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
             DPU_ASSERT(dpu_prepare_xfer(dpu, iM));
         }
         DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_iM", 0, im_sz, DPU_XFER_DEFAULT));
+#    endif
+
+#    ifndef AM_IN_WRAM
+        dpu_id = dpu_id_rank;
+        DPU_FOREACH(dpu_rank, dpu) {
+            DPU_ASSERT(dpu_prepare_xfer(dpu, aM_32));
+        }
+        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_aM_32", 0, am_sz, DPU_XFER_DEFAULT));
 #    endif
 
         dpu_id = dpu_id_rank;
@@ -441,7 +456,7 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
             }
         }
         // classifies the new N-gram through the Associative Memory matrix.
-        results[result_num++] = associative_memory_32bit(q, hd.aM_32);
+        results[result_num++] = associative_memory_32bit(q);
     }
 
     return 0;
