@@ -4,7 +4,6 @@
 #include <perfcounter.h>
 #include <stdlib.h>
 
-#define COUNTER_CONFIG COUNT_CYCLES
 #ifdef DEBUG
 #    define CYCLES_COUNT_START(c) cycles_count_start(c)
 #else
