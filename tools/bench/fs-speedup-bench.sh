@@ -15,26 +15,29 @@ max_dpu=""
 min_tasklet=""
 max_tasklet=""
 input=""
+host_done=0
 
 export SHOW_DPU_LOGS=0
 
 bench() {
-    printf "Host,DPU,PREPARE,COPY_IN,DPU_RUN,NR_TASKLETS,NR_DPUS\n"
     for d in $(seq "${min_dpu}" "${dpu_interval}" "${max_dpu}"); do
         export NR_DPUS="${d}"
         for t in $(seq "${min_tasklet}" "${max_tasklet}"); do
             export NR_TASKLETS="${t}"
 
             make clean >/dev/null && make >/dev/null
-            if [ "${dpu_only}" -eq 1 ]; then
+            if [ "${host_done}" -eq 1 ]; then
                 out="$(./pim_hdc -d -i "${input}" -r)"
                 host_runtime="0"
             else
                 out="$(./pim_hdc -d -i "${input}" -t -r)"
                 host_runtime="$(echo "${out}" | sed -n 2p)"
+                printf "%s,%s,%s,%s,%s\n" "0" "${host_runtime}" "${sz}" "${t}" "${d}"
+                host_done=1
             fi
-            dpu_runtime="$(echo "${out}" | sed -n 1p)"
-            printf "%s,%s,%s,%s\n" "${host_runtime}" "${dpu_runtime}" "${t}" "${d}"
+            dpu_runtime="$(echo "${out}" | sed -n 1p | cut -d',' -f1)"
+
+            printf "%s,%s,%s,%s,%s\n" "1" "${dpu_runtime}" "${sz}" "${t}" "${d}"
         done
     done
 }
@@ -73,5 +76,7 @@ min_dpu="${1}"
 max_dpu="${2}"
 min_tasklet="${3}"
 max_tasklet="${4}"
+
+sz=$(du -b "${input}" | cut -f1)
 
 bench

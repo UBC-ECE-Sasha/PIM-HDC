@@ -1,34 +1,59 @@
-#!/bin/sh
+#!/bin/bash
 
-# Set COUNTER_CONFIG env var
+# Set COUNTER_CONFIG env var:
+#  export COUNTER_CONFIG=COUNT_INSTRUCTIONS
+#     OR
+#  export COUNTER_CONFIG=COUNT_CYCLES
 
-# Bytes = CHANNELS * NUMBER_OF_INPUT_SAMPLES * sizeof(int32_t)
-# ie: 4 * 119064 * 4 = 1905024
+# ../tools/bytes-per-counter/bytes_tls.sh 3848888 data/large8-data.bin 512
 
-bytes="${1:-1905024}"
-file="${2:-"data/large8-data.bin"}"
+####
 
-out=$(./pim_hdc -d -i "${file}" | \
-grep 'Tasklet [0-9]*: completed in' | \
-grep -o -P '(?<=in )[0-9]*(?= cycles)')
+# ADD ___ DPU idx to dpu for correct matching
 
-count=$(echo "${out}" | awk '{ sum+=$1} END {print sum}')
+####
 
-sorted=$(echo "${out}" | sort)
-largest=$(echo "${sorted}" | head -1)
-smallest=$(echo "${sorted}" | tail -1)
+bytes="${1:-86528}"
+file="${2:-"data/small-data.bin"}"
+dpus="${3:-22}"
 
-ratio=$(echo "${largest} / ${smallest}" | bc -l)
+out=$(./pim_hdc -d -i "${file}")
+
+declare -a largest_times
+declare -a smallest_times
+
+for ((i=0; i<dpus; i++)); do
+    temp="$(echo "${out}" | \
+        grep "___ DPU $i" | \
+        grep 'tasklet [0-9]*: completed in' | \
+        grep -o -P '(?<=in )[0-9]*(?= cycles)')"
+    largest_times+=("$(echo "$temp" | sort -n | tail -1)")
+    smallest_times+=("$(echo "$temp" | sort -n | head -1)")
+done
+
+count=0
+for t in "${largest_times[@]}"; do
+    echo $t
+  count=$((count+t))
+done
+
+largest=$(IFS=$'\n'; echo "${largest_times[*]}" | sort -nr | head -n1)
+smallest=$(IFS=$'\n'; echo "${smallest_times[*]}" | sort -nr | head -n1)
 
 cpb=$(echo "${count} / ${bytes}" | bc -l)
+
+echo "----- DPU ----- "
 
 echo "count: ${count}"
 echo "bytes: ${bytes}"
 
 echo "${count} / ${bytes} = ${cpb}"
 
-echo "slowest / fastest ratio"
-echo "${largest} / ${smallest} = ${ratio}"
+echo "slowest : fastest ratio"
+echo "ratio = ${largest} : ${smallest}"
+
+echo "----- Host ----- "
+perf stat -B -e cycles:u,instructions:u ./pim_hdc -i "${file}"
 
 # CYCLES / BYTE =
 #     654599782096 / 1905024 = 343617.60381811462742726600
