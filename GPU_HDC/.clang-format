@@ -1,0 +1,30 @@
+---
+AlignAfterOpenBracket: Align
+AllowShortBlocksOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BreakAfterJavaFieldAnnotations: true
+BreakBeforeBraces: Attach
+BreakBeforeTernaryOperators: false
+ColumnLimit: 100
+IncludeBlocks: Regroup
+IndentCaseLabels: true
+IndentPPDirectives: AfterHash
+IndentWidth: 4
+IndentWrappedFunctionNames: false
+Language: Cpp
+MaxEmptyLinesToKeep: 1
+PointerAlignment: Right
+SortIncludes: true
+SpaceAfterCStyleCast: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+TabWidth: 4
+UseTab: Never
+AlwaysBreakAfterReturnType: All
+...
