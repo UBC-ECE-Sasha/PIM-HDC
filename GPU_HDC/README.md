@@ -24,8 +24,8 @@ Example: Run HDC on DPU and host and verify they are the same:
 
 The following are compile time settable options and their defaults:
 
-* `NR_DPUS = 32`
-* `NR_TASKLETS = 1`
+* `NR_BLOCKS = 32`
+* `NR_THREADS = 1`
 
 * `SHOW_DPU_LOGS = 1` - Print DPU logs to `stdout`
 * `BULK_XFER = 1`     - Use bulk transfers to read and write data to DPU

@@ -22,22 +22,22 @@
  * @struct dpu_input_data
  * @brief Input data passed to each dpu
  */
-typedef struct dpu_input_data {
+typedef struct gpu_input_data {
     uint32_t dpu_id;                       /**< ID of DPU */
-    uint32_t task_begin[NR_TASKLETS];      /**< Start location for each tasklet */
-    uint32_t task_end[NR_TASKLETS];        /**< End location for each tasklet */
-    uint32_t idx_offset[NR_TASKLETS];      /**< Result offset for each tasklet */
+    uint32_t task_begin[NR_THREADS];      /**< Start location for each tasklet */
+    uint32_t task_end[NR_THREADS];        /**< End location for each tasklet */
+    uint32_t idx_offset[NR_THREADS];      /**< Result offset for each tasklet */
     uint32_t buffer_channel_aligned_size;  /**< Aligned size of buffer channel */
     uint32_t buffer_channel_usable_length; /**< Length of buffer channel */
     uint32_t buffer_channel_length;        /**< Length of buffer channel looped over */
     uint32_t output_buffer_length;         /**< Length of the output buffer */
-} dpu_input_data;
+} gpu_input_data;
 
 /**
  * @struct dpu_hdc_vars
  * @brief HDC specific data and variables passed to each DPU
  */
-typedef struct dpu_hdc_vars {
+typedef struct gpu_hdc_vars {
     int32_t dimension; /**< Dimension of the hypervectors */
     int32_t channels;  /**< Number of acquisition's CHANNELS */
     int32_t bit_dim;   /**< Dimension of the hypervectors after compression */
@@ -50,6 +50,6 @@ typedef struct dpu_hdc_vars {
     uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)]; /**< Item memory */
 #endif
     uint32_t aM_32[MAX_N * (MAX_BIT_DIM + 1)]; /**< Associative memory */
-} dpu_hdc_vars;
+} gpu_hdc_vars;
 
 #endif // INIT_H_

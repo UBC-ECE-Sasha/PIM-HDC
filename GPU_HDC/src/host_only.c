@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-dpu_hdc_vars hd;
+gpu_hdc_vars hd;
 
 // Number of samples stored in each channel in the dataset
 // In the test data sets, these are EMG samples which have been

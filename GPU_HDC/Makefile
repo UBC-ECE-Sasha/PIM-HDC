@@ -12,8 +12,8 @@ ifeq ($(TEST), 1)
 endif
 
 # Default
-NR_DPUS ?= 32
-NR_TASKLETS ?= 1
+NR_BLOCKS ?= 32
+NR_THREADS ?= 1
 
 MAX_BIT_DIM ?= 313
 MAX_CHANNELS ?= 4
@@ -21,7 +21,7 @@ MAX_N ?= 5
 MAX_IM_LENGTH ?= 22
 HDC_MAX_INPUT ?= 384
 
-CFLAGS+=-DNR_DPUS=$(NR_DPUS) -DNR_TASKLETS=$(NR_TASKLETS) -DHOST=1
+CFLAGS+=-DNR_BLOCKS=$(NR_BLOCKS) -DNR_THREADS=$(NR_THREADS) -DHOST=1
 CFLAGS+=-DMAX_BIT_DIM=$(MAX_BIT_DIM) -DMAX_CHANNELS=$(MAX_CHANNELS)
 CFLAGS+=-DMAX_N=$(MAX_N) -DMAX_IM_LENGTH=$(MAX_IM_LENGTH)
 CFLAGS+=-DCOUNTER_CONFIG=$(COUNTER_CONFIG) -DHDC_MAX_INPUT=$(HDC_MAX_INPUT)
@@ -34,7 +34,7 @@ CFLAGS += -D_POSIX_C_SOURCE=199309L
 default: $(TARGET)
 all: default
 
-SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c)
+SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c) $(wildcard src/gpu/*.c)
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -I../PIM_HDC/PIM-common/common/include -I../PIM_HDC/PIM-common/host/include
