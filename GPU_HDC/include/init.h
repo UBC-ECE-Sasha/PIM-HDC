@@ -24,9 +24,9 @@
  */
 typedef struct gpu_input_data {
     uint32_t dpu_id;                       /**< ID of DPU */
-    uint32_t task_begin[NR_THREADS];      /**< Start location for each tasklet */
-    uint32_t task_end[NR_THREADS];        /**< End location for each tasklet */
-    uint32_t idx_offset[NR_THREADS];      /**< Result offset for each tasklet */
+    uint32_t task_begin[NR_THREADS*NR_BLOCKS];      /**< Start location for each tasklet */
+    uint32_t task_end[NR_THREADS*NR_BLOCKS];        /**< End location for each tasklet */
+    uint32_t idx_offset[NR_THREADS*NR_BLOCKS];      /**< Result offset for each tasklet */
     uint32_t buffer_channel_aligned_size;  /**< Aligned size of buffer channel */
     uint32_t buffer_channel_usable_length; /**< Length of buffer channel */
     uint32_t buffer_channel_length;        /**< Length of buffer channel looped over */

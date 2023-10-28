@@ -41,40 +41,6 @@ typedef struct hdc_data {
 typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
 
 /**
- * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as
- * possible
- * @param[in]  length                  Lengths of @p buffer_channel_lengths
- * @param[in]  samples                 Samples to distribute
- * @param[out] buffer_channel_lengths  Lengths for each channel
- */
-static void
-calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length],
-                         uint32_t input_samples) {
-    /* Section of buffer for one channel, without samples not divisible by n */
-    uint32_t samples = input_samples / length;
-    /* Remove samples not divisible by n */
-    uint32_t chunk_size = samples - (samples % hd.n);
-    /* Extra data for last DPU */
-    uint32_t extra_data = input_samples - (chunk_size * length);
-    uint32_t extra_data_divisible = extra_data / hd.n;
-
-    for (uint32_t i = 0; i < length; i++) {
-        buffer_channel_lengths[i] = chunk_size;
-    }
-
-    uint32_t i = 0;
-    while (extra_data_divisible != 0) {
-        buffer_channel_lengths[i] += hd.n;
-        extra_data_divisible--;
-        i++;
-        if (i == length) {
-            i = 0;
-        }
-    }
-    buffer_channel_lengths[length - 1] += extra_data % hd.n;
-}
-
-/**
  * @brief Run a HDC workload and time the execution
  *
  * @param[in] fn        Function to run HDC algorithm
@@ -169,6 +135,40 @@ print_results(hdc_data *data) {
 }
 
 /**
+ * @brief Calculate individual buffer lengths for each DPU or tasklet with as even distribution as
+ * possible
+ * @param[in]  length                  Lengths of @p buffer_channel_lengths
+ * @param[in]  samples                 Samples to distribute
+ * @param[out] buffer_channel_lengths  Lengths for each channel
+ */
+static void
+calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length],
+                         uint32_t input_samples) {
+    /* Section of buffer for one channel, without samples not divisible by n */
+    uint32_t samples = input_samples / length;
+    /* Remove samples not divisible by n */
+    uint32_t chunk_size = samples - (samples % hd.n);
+    /* Extra data for last DPU */
+    uint32_t extra_data = input_samples - (chunk_size * length);
+    uint32_t extra_data_divisible = extra_data / hd.n;
+
+    for (uint32_t i = 0; i < length; i++) {
+        buffer_channel_lengths[i] = chunk_size;
+    }
+
+    uint32_t i = 0;
+    while (extra_data_divisible != 0) {
+        buffer_channel_lengths[i] += hd.n;
+        extra_data_divisible--;
+        i++;
+        if (i == length) {
+            i = 0;
+        }
+    }
+    buffer_channel_lengths[length - 1] += extra_data % hd.n;
+}
+
+/**
  * @brief Set up the data for each GPU block
  * @param[out]    input                  Datastructure to be populated for GPU
  * @param[in]     buffer_channel_length  Length of an individual channel
@@ -183,12 +183,14 @@ static int
 setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in,
                int32_t *data_set, uint32_t *buff_offset, uint32_t gpu_id) {
 
-    uint32_t buffer_channel_lengths[NR_THREADS];
-    calculate_buffer_lengths(NR_THREADS, buffer_channel_lengths, buffer_channel_length);
+    uint32_t num_splits = NR_BLOCKS*NR_THREADS;
+
+    uint32_t buffer_channel_lengths[NR_BLOCKS*NR_THREADS];
+    calculate_buffer_lengths(NR_BLOCKS*NR_THREADS, buffer_channel_lengths, buffer_channel_length);
 
     uint32_t loc = 0;
     uint32_t idx_offset = 0;
-    for (uint8_t idx = 0; idx < NR_THREADS; idx++) {
+    for (uint8_t idx = 0; idx < num_splits; idx++) {
         input->task_begin[idx] = loc;
         loc += buffer_channel_lengths[idx];
         input->task_end[idx] = loc;
@@ -213,13 +215,13 @@ setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     }
     input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
-    if ((input->buffer_channel_usable_length * hd.channels) > HDC_MAX_INPUT) {
-        fprintf(stderr,
-                "buffer_channel_usable_length * hd.channels (%u) cannot be greater than HDC_MAX_INPUT "
-                "= (%d)\n",
-                input->buffer_channel_usable_length * hd.channels, HDC_MAX_INPUT);
-        return -1;
-    }
+    // if ((input->buffer_channel_usable_length * hd.channels) > HDC_MAX_INPUT) {
+    //     fprintf(stderr,
+    //             "buffer_channel_usable_length * hd.channels (%u) cannot be greater than HDC_MAX_INPUT "
+    //             "= (%d)\n",
+    //             input->buffer_channel_usable_length * hd.channels, HDC_MAX_INPUT);
+    //     return -1;
+    // }
 
     /* Output */
     uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
@@ -268,42 +270,25 @@ gpu_setup_hdc(int32_t *data_set, int32_t *results, void *runtime) {
 
     uint32_t buff_offset = 0;
 
-    gpu_input_data inputs[NR_BLOCKS];
-    in_buffer read_bufs[NR_BLOCKS];
+    gpu_input_data inputs;
+    in_buffer read_buf;
 
     uint32_t gpu_id = 0;
     uint32_t gpu_id_rank = 0;
 
     uint32_t buffer_channel_lengths[NR_BLOCKS];
 
-    uint32_t result[NR_BLOCKS][HDC_MAX_INPUT];
-
-    calculate_buffer_lengths(NR_BLOCKS, buffer_channel_lengths, number_of_input_samples);
+    uint32_t result[NR_BLOCKS*NR_THREADS][HDC_MAX_INPUT];
 
     // Copy in:
-    uint32_t result_num = 0;
-    for (int i = 0; i < NR_BLOCKS; i++) {
-        setup_gpu_data(&inputs[i], buffer_channel_lengths[i],
-                       &read_bufs[i], data_set, &buff_offset, i);
+    setup_gpu_data(&inputs, number_of_input_samples,
+                   &read_buf, data_set, &buff_offset, NR_BLOCKS-1);
 
-        for (int t = 0; t < NR_THREADS; t++) {
-            if ((inputs[i].task_end[t] - inputs[i].task_begin[t]) > 0) {
-                ret = gpu_hdc(inputs[i], read_bufs[i].buffer, result[i], inputs[i].idx_offset[t],
-                              inputs[i].task_begin[t], inputs[i].task_end[t]);
+    ret = gpu_hdc(inputs, data_set, results);
 
-
-            } else {
-                printf("%u:%u: No work to do\n", i, t);
-            }
-        }
-
-        for (uint32_t j = 0; j < inputs[i].output_buffer_length; j++) {
-            results[result_num++] = result[i][j];
-        }
-
-    }
-
-
+    // for (uint32_t j = 0; j < inputs.output_buffer_length; j++) {
+    //     results[j] = result[j];
+    // }
 
     return 0;
 }
@@ -370,7 +355,9 @@ host_hdc(int32_t *data_set, int32_t *results, void *runtime) {
             }
         }
         // classifies the new N-gram through the Associative Memory matrix.
-        results[result_num++] = host_associative_memory_32bit(q, hd.aM_32);
+        results[result_num] = host_associative_memory_32bit(q, hd.aM_32);
+        // printf("i=%i,r=%i\n", result_num, results[result_num]);
+        result_num++;
     }
 
     return 0;

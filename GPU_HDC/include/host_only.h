@@ -14,7 +14,7 @@ extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 extern uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 
 int
-gpu_hdc(gpu_input_data gpu_data, int32_t read_buf[HDC_MAX_INPUT], int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t task_end);
+gpu_hdc(gpu_input_data gpu_data, int32_t *read_buf, int32_t *result);
 int
 read_data(char const *input_file, double **test_set);
 int
