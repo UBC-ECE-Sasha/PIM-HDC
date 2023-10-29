@@ -139,56 +139,55 @@ gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_va
 
     int result_num = 0;
 
-    for (int thr = 0; thr < NR_THREADS*NR_BLOCKS; thr++) {
-        result_num = 0;
-        if ((gpu_data->task_end[thr] - gpu_data->task_begin[thr]) <= 0) {
-            printf("%u: No work to do\n", thr);
-            continue;
-        }
+    int thr = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-        for (int ix = gpu_data->task_begin[thr]; ix < gpu_data->task_end[thr]; ix += hd->n) {
+    if ((gpu_data->task_end[thr] - gpu_data->task_begin[thr]) <= 0) {
+        printf("%u: No work to do\n", thr);
+        return;
+    }
 
-            for (int z = 0; z < hd->n; z++) {
+    for (int ix = gpu_data->task_begin[thr]; ix < gpu_data->task_end[thr]; ix += hd->n) {
 
-                for (int j = 0; j < hd->channels; j++) {
-                    if (ix + z < gpu_data->buffer_channel_usable_length) {
-                        int ind = A2D1D(gpu_data->buffer_channel_usable_length, j, ix + z);
-                        quantized_buffer[j] = read_buf[ind];
-                    }
-                }
+        for (int z = 0; z < hd->n; z++) {
 
-                // Spatial and Temporal Encoder: computes the N-gram.
-                // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
-                if (z == 0) {
-                    compute_N_gram(quantized_buffer, q, hd);
-                } else {
-                    compute_N_gram(quantized_buffer, q_N, hd);
-
-                    // Here the hypervector q is shifted by 1 position as permutation,
-                    // before performing the componentwise XOR operation with the new query (q_N).
-                    int32_t shifted_q;
-                    overflow = q[0] & MASK;
-                    for (int i = 1; i < hd->bit_dim; i++) {
-                        old_overflow = overflow;
-                        overflow = q[i] & MASK;
-                        shifted_q = (q[i] >> 1) | (old_overflow << (32 - 1));
-                        q[i] = q_N[i] ^ shifted_q;
-                    }
-
-                    old_overflow = overflow;
-                    overflow = (q[hd->bit_dim] >> 16) & MASK;
-                    shifted_q = (q[hd->bit_dim] >> 1) | (old_overflow << (32 - 1));
-                    q[hd->bit_dim] = q_N[hd->bit_dim] ^ shifted_q;
-
-                    shifted_q = (q[0] >> 1) | (overflow << (32 - 1));
-                    q[0] = q_N[0] ^ shifted_q;
+            for (int j = 0; j < hd->channels; j++) {
+                if (ix + z < gpu_data->buffer_channel_usable_length) {
+                    int ind = A2D1D(gpu_data->buffer_channel_usable_length, j, ix + z);
+                    quantized_buffer[j] = read_buf[ind];
                 }
             }
 
-            // Classifies the new N-gram through the Associative Memory matrix.
-            result[gpu_data->idx_offset[thr] + result_num] = associative_memory_32bit(q, hd->aM_32, hd);
-            // printf("i=%i,r=%i\n", result_num, result[gpu_data->idx_offset[thr] + result_num]);
-            result_num++;
+            // Spatial and Temporal Encoder: computes the N-gram.
+            // N.B. if N = 1 we don't have the Temporal Encoder but only the Spatial Encoder.
+            if (z == 0) {
+                compute_N_gram(quantized_buffer, q, hd);
+            } else {
+                compute_N_gram(quantized_buffer, q_N, hd);
+
+                // Here the hypervector q is shifted by 1 position as permutation,
+                // before performing the componentwise XOR operation with the new query (q_N).
+                int32_t shifted_q;
+                overflow = q[0] & MASK;
+                for (int i = 1; i < hd->bit_dim; i++) {
+                    old_overflow = overflow;
+                    overflow = q[i] & MASK;
+                    shifted_q = (q[i] >> 1) | (old_overflow << (32 - 1));
+                    q[i] = q_N[i] ^ shifted_q;
+                }
+
+                old_overflow = overflow;
+                overflow = (q[hd->bit_dim] >> 16) & MASK;
+                shifted_q = (q[hd->bit_dim] >> 1) | (old_overflow << (32 - 1));
+                q[hd->bit_dim] = q_N[hd->bit_dim] ^ shifted_q;
+
+                shifted_q = (q[0] >> 1) | (overflow << (32 - 1));
+                q[0] = q_N[0] ^ shifted_q;
+            }
         }
+
+        // Classifies the new N-gram through the Associative Memory matrix.
+        result[gpu_data->idx_offset[thr] + result_num] = associative_memory_32bit(q, hd->aM_32, hd);
+        // printf("i=%i,r=%i\n", result_num, result[gpu_data->idx_offset[thr] + result_num]);
+        result_num++;
     }
 }

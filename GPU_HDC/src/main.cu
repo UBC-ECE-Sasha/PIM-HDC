@@ -18,6 +18,17 @@
 #define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
 /**
+ * @struct gpu_runtime
+ * @brief GPU execution times
+ */
+typedef struct gpu_runtime {
+    double execution_time_alloc;
+    double execution_time_copy_in;
+    double execution_time_launch;
+    double execution_time_copy_out;
+} gpu_runtime;
+
+/**
  * @struct in_buffer
  *
  * @brief   Input buffer for a DPU
@@ -258,16 +269,24 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
 
     uint32_t buff_offset = 0;
 
+    gpu_runtime *rt = (gpu_runtime *)runtime;
+
+    struct timespec start, end;
+
     gpu_input_data *g_inputs;
     gpu_hdc_vars *g_hd;
     int32_t *g_results;
 
+    TIME_NOW(&start);
     uint32_t result_size = data->result_len * sizeof(int32_t);
     gpuErrchk(cudaMalloc((void **)&g_results, result_size));
-
     gpuErrchk(cudaMallocManaged((void **)&g_inputs, sizeof(gpu_input_data), cudaMemAttachGlobal));
     gpuErrchk(cudaMallocManaged((void **)&g_hd, sizeof(gpu_hdc_vars), cudaMemAttachGlobal));
+    TIME_NOW(&end);
 
+    rt->execution_time_alloc = TIME_DIFFERENCE(start, end);
+
+    TIME_NOW(&start);
     memcpy(g_hd, &hd, sizeof(gpu_hdc_vars));
     memcpy(g_hd->iM, iM, MAX_IM_LENGTH * (MAX_BIT_DIM + 1) * sizeof(uint32_t));
     memcpy(g_hd->chAM, chAM, MAX_CHANNELS * (MAX_BIT_DIM + 1) * sizeof(uint32_t));
@@ -275,10 +294,23 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
     // Copy in:
     setup_gpu_data(g_inputs, number_of_input_samples,
                    data->data_set, &buff_offset, NR_BLOCKS-1);
+    TIME_NOW(&end);
 
-    gpu_hdc<<<1,1>>>(g_inputs, data->data_set, g_results, g_hd);
+    rt->execution_time_copy_in = TIME_DIFFERENCE(start, end);
 
+    TIME_NOW(&start);
+    gpu_hdc<<<NR_BLOCKS,NR_THREADS>>>(g_inputs, data->data_set, g_results, g_hd);
+    TIME_NOW(&end);
+
+    rt->execution_time_launch = TIME_DIFFERENCE(start, end);
+
+    TIME_NOW(&start);
     gpuErrchk(cudaMemcpy((void *)data->results, (void *)g_results, result_size, cudaMemcpyDeviceToHost));
+    TIME_NOW(&end);
+
+    printf("csz=%i\n", result_size);
+
+    rt->execution_time_copy_out = TIME_DIFFERENCE(start, end);
 
     gpuErrchk(cudaFree(g_inputs));
     gpuErrchk(cudaFree(g_hd));
@@ -448,6 +480,8 @@ main(int argc, char **argv) {
     hdc_data gpu_results = {.data_set = g_data_set, .results = NULL};
     hdc_data host_results = {.data_set = data_set, .results = NULL};
 
+    gpu_runtime rt;
+
     if (test_results) {
         host_ret = run_hdc(host_hdc, &host_results, NULL);
         if (host_ret != 0) {
@@ -456,7 +490,7 @@ main(int argc, char **argv) {
     }
 
     if (use_gpu) {
-        gpu_ret = run_hdc(gpu_setup_hdc, &gpu_results, NULL);
+        gpu_ret = run_hdc(gpu_setup_hdc, &gpu_results, &rt);
         if (gpu_ret != 0) {
             goto err;
         }
@@ -471,6 +505,24 @@ main(int argc, char **argv) {
             printf("Host took %fs\n", host_results.execution_time);
         } else {
             printf("%f\n", host_results.execution_time);
+        }
+    }
+
+    if (use_gpu || test_results) {
+        if (!runtime_only) {
+            printf("--- GPU --\n");
+            if (show_results) {
+                print_results(&gpu_results);
+            }
+            printf("GPU took %fs\n", gpu_results.execution_time);
+            printf("GPU alloc took %fs\n", rt.execution_time_alloc);
+            printf("GPU copy_in took %fs\n", rt.execution_time_copy_in);
+            printf("GPU launch took %fs\n", rt.execution_time_launch);
+            printf("GPU copy_out took %fs\n", rt.execution_time_copy_out);
+        } else {
+            printf("%f,%f,%f,%f,%f\n", gpu_results.execution_time,
+                   rt.execution_time_alloc, rt.execution_time_copy_in,
+                   rt.execution_time_launch, rt.execution_time_copy_out);
         }
     }
 

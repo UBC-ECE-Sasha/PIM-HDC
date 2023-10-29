@@ -12,8 +12,8 @@ ifeq ($(TEST), 1)
 endif
 
 # Default
-NR_BLOCKS ?= 32
-NR_THREADS ?= 1
+NR_BLOCKS ?= 1
+NR_THREADS ?= 128
 
 MAX_BIT_DIM ?= 313
 MAX_CHANNELS ?= 4
