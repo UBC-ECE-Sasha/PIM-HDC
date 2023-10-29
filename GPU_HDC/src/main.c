@@ -11,6 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <driver_types.h>
+#include <cuda.h>
+#include "cuda_runtime.h"
 
 #define TIME_NOW(_t) (clock_gettime(CLOCK_MONOTONIC, (_t)))
 
@@ -40,6 +43,14 @@ typedef struct hdc_data {
  */
 typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
 
+#define gpuErrchk(ans) { gpu_assert((ans), __FILE__, __LINE__); }
+inline void gpu_assert(cudaError_t code, const char *file, int line) {
+   if (code != cudaSuccess) {
+      fprintf(stderr,"GPU assert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      exit(code);
+   }
+}
+
 /**
  * @brief Run a HDC workload and time the execution
  *
@@ -50,7 +61,7 @@ typedef int (*hdc)(int32_t *data_set, int32_t *results, void *runtime);
  * @return Non-zero On failure
  */
 static double
-run_hdc(hdc fn, hdc_data *data, void *runtime) {
+run_hdc(hdc fn, hdc_data *data, void *runtime, bool gpu) {
     struct timespec start, end;
 
     int ret = 0;
@@ -59,8 +70,12 @@ run_hdc(hdc fn, hdc_data *data, void *runtime) {
     data->result_len = (number_of_input_samples / hd.n) + extra_result;
     uint32_t result_size = data->result_len * sizeof(int32_t);
 
-    if ((data->results = malloc(result_size)) == NULL) {
-        nomem();
+    if (gpu) {
+        gpuErrchk(cudaMallocManaged((void **)&data->results, result_size, cudaMemAttachGlobal));
+    } else {
+        if ((data->results = malloc(result_size)) == NULL) {
+            nomem();
+        }
     }
 
     TIME_NOW(&start);
@@ -106,19 +121,19 @@ compare_results(hdc_data *dpu_data, hdc_data *host_data, bool check_only) {
         return 0;
     }
 
-    // char *faster;
-    // double time_diff, percent_diff;
-    // if (dpu_data->execution_time > host_data->execution_time) {
-    //     faster = "Host";
-    //     time_diff = dpu_data->execution_time - host_data->execution_time;
-    //     percent_diff = dpu_data->execution_time / host_data->execution_time;
-    // } else {
-    //     faster = "DPU";
-    //     time_diff = host_data->execution_time - dpu_data->execution_time;
-    //     percent_diff = host_data->execution_time / dpu_data->execution_time;
-    // }
+    char *faster;
+    double time_diff, percent_diff;
+    if (dpu_data->execution_time > host_data->execution_time) {
+        faster = "Host";
+        time_diff = dpu_data->execution_time - host_data->execution_time;
+        percent_diff = dpu_data->execution_time / host_data->execution_time;
+    } else {
+        faster = "GPU";
+        time_diff = host_data->execution_time - dpu_data->execution_time;
+        percent_diff = host_data->execution_time / dpu_data->execution_time;
+    }
 
-    // printf("%s was %fs (%f x) faster\n", faster, time_diff, percent_diff);
+    printf("%s was %fs (%f x) faster\n", faster, time_diff, percent_diff);
 
     return ret;
 }
@@ -180,7 +195,7 @@ calculate_buffer_lengths(uint32_t length, uint32_t buffer_channel_lengths[length
  * @return                               Non-zero on failure
  */
 static int
-setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length, in_buffer *data_in,
+setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length,
                int32_t *data_set, uint32_t *buff_offset, uint32_t gpu_id) {
 
     uint32_t num_splits = NR_BLOCKS*NR_THREADS;
@@ -215,14 +230,6 @@ setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     }
     input->buffer_channel_aligned_size = ALIGN(buffer_channel_length * sizeof(int32_t), 8);
 
-    // if ((input->buffer_channel_usable_length * hd.channels) > HDC_MAX_INPUT) {
-    //     fprintf(stderr,
-    //             "buffer_channel_usable_length * hd.channels (%u) cannot be greater than HDC_MAX_INPUT "
-    //             "= (%d)\n",
-    //             input->buffer_channel_usable_length * hd.channels, HDC_MAX_INPUT);
-    //     return -1;
-    // }
-
     /* Output */
     uint32_t extra_result = (buffer_channel_length % hd.n) != 0;
     input->output_buffer_length = (buffer_channel_length / hd.n) + extra_result;
@@ -230,17 +237,6 @@ setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length, in_buffer 
     input->buffer_channel_length = buffer_channel_length;
 
     size_t sz_xfer = input->buffer_channel_usable_length * sizeof(int32_t);
-    data_in->buffer_size = sz_xfer * hd.channels;
-    if (input->buffer_channel_length > 0) {
-        /* Copy each channel into DPU array */
-        for (int i = 0; i < hd.channels; i++) {
-            int32_t *ta = &data_set[(i * number_of_input_samples) + *buff_offset];
-            dbg_printf("INPUT data_set[%d] (%u bytes) (%u chunk_size, %u usable):\n", i,
-                       input->buffer_channel_aligned_size, input->buffer_channel_length,
-                       input->buffer_channel_usable_length);
-            (void) memcpy(&data_in->buffer[i * input->buffer_channel_usable_length], ta, sz_xfer);
-        }
-    }
 
     *buff_offset += input->buffer_channel_length;
 
@@ -270,25 +266,30 @@ gpu_setup_hdc(int32_t *data_set, int32_t *results, void *runtime) {
 
     uint32_t buff_offset = 0;
 
-    gpu_input_data inputs;
+    gpu_input_data *g_inputs;
+    gpu_hdc_vars *g_hd;
+    int32_t *g_data_set;
+
     in_buffer read_buf;
 
-    uint32_t gpu_id = 0;
-    uint32_t gpu_id_rank = 0;
+    uint32_t buffer_size = (sizeof(int32_t) * number_of_input_samples * hd.channels);
+    gpuErrchk(cudaMallocManaged((void **)&g_data_set, buffer_size, cudaMemAttachGlobal));
+    gpuErrchk(cudaMallocManaged((void **)&g_inputs, sizeof(gpu_input_data), cudaMemAttachGlobal));
+    gpuErrchk(cudaMallocManaged((void **)&g_hd, sizeof(gpu_hdc_vars), cudaMemAttachGlobal));
 
-    uint32_t buffer_channel_lengths[NR_BLOCKS];
-
-    uint32_t result[NR_BLOCKS*NR_THREADS][HDC_MAX_INPUT];
+    memcpy(g_hd, &hd, sizeof(gpu_hdc_vars));
+    memcpy(g_hd->iM, iM, MAX_IM_LENGTH * (MAX_BIT_DIM + 1) * sizeof(uint32_t));
+    memcpy(g_hd->chAM, chAM, MAX_CHANNELS * (MAX_BIT_DIM + 1) * sizeof(uint32_t));
 
     // Copy in:
-    setup_gpu_data(&inputs, number_of_input_samples,
-                   &read_buf, data_set, &buff_offset, NR_BLOCKS-1);
+    setup_gpu_data(g_inputs, number_of_input_samples,
+                   data_set, &buff_offset, NR_BLOCKS-1);
 
-    ret = gpu_hdc(inputs, data_set, results);
+    ret = gpu_hdc(g_inputs, data_set, results, g_hd);
 
-    // for (uint32_t j = 0; j < inputs.output_buffer_length; j++) {
-    //     results[j] = result[j];
-    // }
+    gpuErrchk(cudaFree(g_data_set));
+    gpuErrchk(cudaFree(g_inputs));
+    gpuErrchk(cudaFree(g_hd));
 
     return 0;
 }
@@ -451,14 +452,14 @@ main(int argc, char **argv) {
     hdc_data host_results = {.data_set = data_set, .results = NULL};
 
     if (test_results) {
-        host_ret = run_hdc(host_hdc, &host_results, NULL);
+        host_ret = run_hdc(host_hdc, &host_results, NULL, false);
         if (host_ret != 0) {
             goto err;
         }
     }
 
     if (use_gpu) {
-        gpu_ret = run_hdc(gpu_setup_hdc, &gpu_results, NULL);
+        gpu_ret = run_hdc(gpu_setup_hdc, &gpu_results, NULL, true);
         if (gpu_ret != 0) {
             goto err;
         }
@@ -484,7 +485,7 @@ err:
     free(data_set);
     free(test_set);
     free(host_results.results);
-    free(gpu_results.results);
+    cudaFree(gpu_results.results);
 
     return (ret + gpu_ret + host_ret);
 }

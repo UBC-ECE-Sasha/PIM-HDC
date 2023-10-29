@@ -2,7 +2,6 @@
 #define HOST_ONLY_H_
 
 #include "init.h"
-
 #include <uchar.h>
 
 // Number of samples in each channel's dataset
@@ -14,7 +13,7 @@ extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 extern uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 
 int
-gpu_hdc(gpu_input_data gpu_data, int32_t *read_buf, int32_t *result);
+gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_vars *hd);
 int
 read_data(char const *input_file, double **test_set);
 int

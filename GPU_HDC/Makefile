@@ -37,7 +37,7 @@ all: default
 SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c) $(wildcard src/gpu/*.c)
 OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
-INC=-Iinclude -I../PIM_HDC/PIM-common/common/include -I../PIM_HDC/PIM-common/host/include
+INC=-Iinclude -I../PIM_HDC/PIM-common/common/include -I../PIM_HDC/PIM-common/host/include -I/opt/cuda/include
 
 %.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) $(INC) -c $< -o $@

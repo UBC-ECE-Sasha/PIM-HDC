@@ -1,4 +1,5 @@
 #include "host_only.h"
+#include "init.h"
 
 #include <errno.h>
 #include <math.h>
