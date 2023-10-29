@@ -3,6 +3,9 @@
 
 #include "init.h"
 #include <uchar.h>
+#include <driver_types.h>
+#include <cuda.h>
+#include "cuda_runtime.h"
 
 // Number of samples in each channel's dataset
 extern int32_t number_of_input_samples;
@@ -12,7 +15,8 @@ extern gpu_hdc_vars hd;
 extern uint32_t iM[MAX_IM_LENGTH * (MAX_BIT_DIM + 1)];
 extern uint32_t chAM[MAX_CHANNELS * (MAX_BIT_DIM + 1)];
 
-int
+__global__
+void
 gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_vars *hd);
 int
 read_data(char const *input_file, double **test_set);

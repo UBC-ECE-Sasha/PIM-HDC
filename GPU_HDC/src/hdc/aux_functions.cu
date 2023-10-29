@@ -44,7 +44,7 @@ max_dist_hamm(int distances[CLASSES]) {
  * @param[out] sims Distances' vector
  */
 static void
-hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
+hamming_dist(uint32_t *q, uint32_t *aM, int sims[CLASSES]) {
     for (int i = 0; i < CLASSES; i++) {
         sims[i] = 0;
         for (int j = 0; j < hd.bit_dim + 1; j++) {
@@ -61,7 +61,7 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
  * @return          Classification result
  */
 int
-host_associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
+host_associative_memory_32bit(uint32_t *q_32, uint32_t *aM_32) {
     int sims[CLASSES] = {0};
 
     // Computes Hamming Distances
@@ -78,7 +78,7 @@ host_associative_memory_32bit(uint32_t q_32[hd.bit_dim + 1], uint32_t *aM_32) {
  * @param[out] query      Query hypervector
  */
 void
-host_compute_N_gram(int32_t input[hd.channels], uint32_t query[hd.bit_dim + 1]) {
+host_compute_N_gram(int32_t *input, uint32_t *query) {
 
     uint32_t chHV[MAX_CHANNELS + 1];
 

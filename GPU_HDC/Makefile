@@ -1,5 +1,5 @@
 CC = nvcc
-CFLAGS = -lm -O3 -g
+CFLAGS = -lm -O3 -g -diag-suppress 2464,68
 TARGET = gpu_hdc
 
 # define DEBUG in the source if we are debugging
@@ -34,12 +34,12 @@ CFLAGS += -D_POSIX_C_SOURCE=199309L
 default: $(TARGET)
 all: default
 
-SOURCES = $(wildcard src/*.c) $(wildcard src/hdc/*.c) $(wildcard src/gpu/*.c)
-OBJECTS = $(patsubst %.c, %.o, $(SOURCES))
+SOURCES = $(wildcard src/*.cu) $(wildcard src/hdc/*.cu) $(wildcard src/gpu/*.cu)
+OBJECTS = $(patsubst %.cu, %.o, $(SOURCES))
 HEADERS = $(wildcard include/*.h)
 INC=-Iinclude -I../PIM_HDC/PIM-common/common/include -I../PIM_HDC/PIM-common/host/include -I/opt/cuda/include
 
-%.o: %.c $(HEADERS)
+%.o: %.cu $(HEADERS)
 	$(CC) $(CFLAGS) $(INC) -c $< -o $@
 
 .PRECIOUS: $(TARGET) $(OBJECTS)

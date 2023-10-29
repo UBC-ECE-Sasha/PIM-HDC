@@ -2,6 +2,9 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <driver_types.h>
+#include <cuda.h>
+#include "cuda_runtime.h"
 
 #define MASK 1
 
@@ -11,7 +14,7 @@
  * @param i The i-th variable that composes the hypervector
  * @return  Number of 1's in i-th variable of hypervector
  */
-static inline int
+__device__ static inline int
 number_of_set_bits(uint32_t i) {
     i = i - ((i >> 1) & 0x55555555);
     i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
@@ -24,7 +27,7 @@ number_of_set_bits(uint32_t i) {
  * @param[in] distances Distances associated to each class
  * @return              The class related to the maximum distance
  */
-static int
+__device__ static int
 max_dist_hamm(int distances[CLASSES]) {
     int max = distances[0];
     int max_index = 0;
@@ -46,7 +49,7 @@ max_dist_hamm(int distances[CLASSES]) {
  * @param[in] aM    Associative Memory matrix
  * @param[out] sims Distances' vector
  */
-static void
+__device__ static void
 hamming_dist(uint32_t *q, uint32_t *aM, int sims[CLASSES], gpu_hdc_vars *hd) {
     for (int i = 0; i < CLASSES; i++) {
         sims[i] = 0;
@@ -63,7 +66,7 @@ hamming_dist(uint32_t *q, uint32_t *aM, int sims[CLASSES], gpu_hdc_vars *hd) {
  * @param[in] aM_32 Trained associative memory
  * @return          Classification result
  */
-static int
+__device__ static int
 associative_memory_32bit(uint32_t *q_32, uint32_t *aM_32, gpu_hdc_vars *hd) {
     int sims[CLASSES] = {0};
 
@@ -80,7 +83,7 @@ associative_memory_32bit(uint32_t *q_32, uint32_t *aM_32, gpu_hdc_vars *hd) {
  * @param[in] input       Input data
  * @param[out] query      Query hypervector
  */
-static void
+__device__ static void
 compute_N_gram(int32_t *input, uint32_t *query, gpu_hdc_vars *hd) {
 
     uint32_t chHV[MAX_CHANNELS + 1];
@@ -125,7 +128,7 @@ compute_N_gram(int32_t *input, uint32_t *query, gpu_hdc_vars *hd) {
  *
  * @return                    Non-zero on failure.
  */
-int
+__global__ void
 gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_vars *hd) {
     uint32_t overflow = 0;
     uint32_t old_overflow = 0;
@@ -134,7 +137,6 @@ gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_va
     uint32_t q_N[MAX_BIT_DIM + 1] = {0};
     int32_t quantized_buffer[MAX_CHANNELS] = {0};
 
-    int ret = 0;
     int result_num = 0;
 
     for (int thr = 0; thr < NR_THREADS*NR_BLOCKS; thr++) {
@@ -189,6 +191,4 @@ gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_va
             result_num++;
         }
     }
-
-    return ret;
 }
