@@ -212,7 +212,7 @@ setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length,
 
     uint32_t loc = 0;
     uint32_t idx_offset = 0;
-    for (uint8_t idx = 0; idx < num_splits; idx++) {
+    for (uint32_t idx = 0; idx < num_splits; idx++) {
         input->task_begin[idx] = loc;
         loc += buffer_channel_lengths[idx];
         input->task_end[idx] = loc;
@@ -300,6 +300,8 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
 
     TIME_NOW(&start);
     gpu_hdc<<<NR_BLOCKS,NR_THREADS>>>(g_inputs, data->data_set, g_results, g_hd);
+
+    cudaDeviceSynchronize();
     TIME_NOW(&end);
 
     rt->execution_time_launch = TIME_DIFFERENCE(start, end);
@@ -308,7 +310,6 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
     gpuErrchk(cudaMemcpy((void *)data->results, (void *)g_results, result_size, cudaMemcpyDeviceToHost));
     TIME_NOW(&end);
 
-    printf("csz=%i\n", result_size);
 
     rt->execution_time_copy_out = TIME_DIFFERENCE(start, end);
 

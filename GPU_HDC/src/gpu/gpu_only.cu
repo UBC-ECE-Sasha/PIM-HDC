@@ -1,4 +1,5 @@
 #include "init.h"
+#include "common.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -142,7 +143,7 @@ gpu_hdc(gpu_input_data *gpu_data, int32_t *read_buf, int32_t *result, gpu_hdc_va
     int thr = (blockIdx.x * blockDim.x) + threadIdx.x;
 
     if ((gpu_data->task_end[thr] - gpu_data->task_begin[thr]) <= 0) {
-        printf("%u: No work to do\n", thr);
+        dbg_printf("%u: No work to do\n", thr);
         return;
     }
 
