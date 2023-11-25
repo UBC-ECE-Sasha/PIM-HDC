@@ -281,7 +281,9 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
     uint32_t result_size = data->result_len * sizeof(int32_t);
     gpuErrchk(cudaMalloc((void **)&g_results, result_size));
     gpuErrchk(cudaMallocManaged((void **)&g_inputs, sizeof(gpu_input_data), cudaMemAttachGlobal));
-    gpuErrchk(cudaMallocManaged((void **)&g_hd, sizeof(gpu_hdc_vars), cudaMemAttachGlobal));
+    gpuErrchk(cudaMallocManaged((void **)&g_hd, sizeof(gpu_hdc_vars), cudaMemAttachGlobal))
+
+    cudaDeviceSynchronize();
     TIME_NOW(&end);
 
     rt->execution_time_alloc = TIME_DIFFERENCE(start, end);
@@ -308,6 +310,8 @@ gpu_setup_hdc(hdc_data *data, void *runtime) {
 
     TIME_NOW(&start);
     gpuErrchk(cudaMemcpy((void *)data->results, (void *)g_results, result_size, cudaMemcpyDeviceToHost));
+
+    cudaDeviceSynchronize();
     TIME_NOW(&end);
 
 
