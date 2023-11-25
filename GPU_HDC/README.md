@@ -1,20 +1,19 @@
-# PIM HDC
+# GPU HDC
 
-Hyperdimensional computing accelerator using processing in-memory.
+Hyperdimensional computing accelerator using CUDA.
 
 ## Usage
 
 ```text
-usage: ./pim_hdc [ -d ] -i <INPUT_FILE>
-        d: use DPU
+usage: ./gpu_hdc [ -d ] -i <INPUT_FILE>
         i: input file
         r: show runtime only
         s: show results
-        t: test results      - Compare host against DPU
+        t: test results
         h: help message
 ```
 
-Example: Run HDC on DPU and host and verify they are the same:
+Example: Run HDC on GPU and host and verify they are the same:
 
 ```shell script
 ./pim_hdc -i data/large-data.bin -t
@@ -24,11 +23,8 @@ Example: Run HDC on DPU and host and verify they are the same:
 
 The following are compile time settable options and their defaults:
 
-* `NR_BLOCKS = 32`
-* `NR_THREADS = 1`
-
-* `SHOW_DPU_LOGS = 1` - Print DPU logs to `stdout`
-* `BULK_XFER = 1`     - Use bulk transfers to read and write data to DPU
+* `NR_BLOCKS = 8192`
+* `NR_THREADS = 192`
 
 The following should not be reduced unless a non-default dataset is used,
 and they already represent the exact data sizes:
@@ -37,7 +33,7 @@ and they already represent the exact data sizes:
 * `MAX_CHANNELS = 4`
 * `MAX_N = 5`
 * `MAX_IM_LENGTH = 22`
-* `MAX_INPUT = 384`
+* `HDC_MAX_INPUT = 4096`
 
 ## Implementation
 
@@ -46,10 +42,6 @@ The following is a high-level description of the hyperdimensional accelerator.
 1. IM and CIM
 
    * A item memory (IM) maps all symbols in the system to the HD space.
-
-     In the case where `iM` is kept in MRAM (the default), it is defined in in [src/dpu/dpu_task.c](src/dpu/dpu_task.c).
-
-     When kept in WRAM, IM is defined in [include/init.h](include/init.h):
 
      IM can be thought of as a multi-dimensional array:
 
@@ -70,10 +62,6 @@ The following is a high-level description of the hyperdimensional accelerator.
      IM represents discrete signals.
 
    * A continuous item memory (CIM) extends the notion of item memory to analog values (e.g., the signal levels of channels) for mapping.
-
-     In the case where CIM is kept in MRAM (the default), it is defined in in [src/dpu/dpu_task.c](src/dpu/dpu_task.c).
-
-     When kept in WRAM, CIM is defined in [include/init.h](include/init.h):
 
      CIM can be thought of as a multi-dimensional array:
 
