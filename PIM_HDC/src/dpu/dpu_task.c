@@ -11,6 +11,7 @@
 #include <perfcounter.h>
 #include <stdio.h>
 #include <string.h>
+#include <mram.h>
 
 #define MASK 1
 #define MRAM_MAX_READ_SIZE 2048
@@ -26,6 +27,10 @@ __host dpu_hdc_vars hd;
 
 __host int32_t read_buf[HDC_MAX_INPUT];
 __dma_aligned int32_t *output;
+
+#ifdef SAMPLES_IN_MRAM
+uint32_t __mram_noinit mram_read_buf[HDC_MAX_INPUT];
+#endif
 
 // MRAM
 #ifndef IM_IN_WRAM
@@ -64,7 +69,11 @@ dpu_hdc(int32_t *result, uint32_t result_offset, uint32_t task_begin, uint32_t t
             for (int j = 0; j < hd.channels; j++) {
                 if (ix + z < dpu_data.buffer_channel_usable_length) {
                     int ind = A2D1D(dpu_data.buffer_channel_usable_length, j, ix + z);
+#ifdef SAMPLES_IN_MRAM
+                    quantized_buffer[j] = read_32bits_from_mram(ind, mram_read_buf);
+#else
                     quantized_buffer[j] = read_buf[ind];
+#endif
                 }
             }
 
@@ -138,7 +147,11 @@ main() {
     barrier_wait(&finish_barrier);
 
     if (idx == TASKLET_SETUP) {
+#ifdef SAMPLES_IN_MRAM
+        mram_write(output, mram_read_buf, out_size);
+#else
         (void) memcpy(read_buf, output, out_size);
+#endif
     }
 
     perfcounter_t total_cycles = perfcounter_get();

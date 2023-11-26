@@ -246,8 +246,13 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 #else
             DPU_ASSERT(dpu_copy_to(dpu, "hd", 0, &hd, sizeof(hd)));
             DPU_ASSERT(dpu_copy_to(dpu, "dpu_data", 0, &inputs[dpu_id], sizeof(inputs[dpu_id])));
+#    ifdef SAMPLES_IN_MRAM
+            DPU_ASSERT(dpu_copy_to(dpu, "mram_read_buf", 0, read_bufs[dpu_id].buffer,
+                                   read_bufs[dpu_id].buffer_size));
+#    else
             DPU_ASSERT(dpu_copy_to(dpu, "read_buf", 0, read_bufs[dpu_id].buffer,
                                    read_bufs[dpu_id].buffer_size));
+#    endif
 
 #    ifndef CHAM_IN_WRAM
             DPU_ASSERT(dpu_copy_to(dpu, "mram_chAM", 0, chAM, ALIGN(cham_sz, 8)));
@@ -301,8 +306,14 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
             }
             dpu_id++;
         }
-        DPU_ASSERT(
+#    ifdef SAMPLES_IN_MRAM
+            DPU_ASSERT(
+            dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "mram_read_buf", 0, largest, DPU_XFER_DEFAULT));
+#    else
+            DPU_ASSERT(
             dpu_push_xfer(dpu_rank, DPU_XFER_TO_DPU, "read_buf", 0, largest, DPU_XFER_DEFAULT));
+#    endif
+
 #endif
 
         dpu_id_rank = dpu_id;
@@ -342,14 +353,23 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
             }
             DPU_ASSERT(dpu_prepare_xfer(dpu, output_buffer[dpu_id]));
 #else
+#    ifdef SAMPLES_IN_MRAM
+            DPU_ASSERT(dpu_copy_from(dpu, "mram_read_buf", 0, output_buffer[dpu_id], ALIGN(size_xfer, 8)));
+#    else
             DPU_ASSERT(dpu_copy_from(dpu, "read_buf", 0, output_buffer[dpu_id], size_xfer));
+#    endif
 #endif
             dpu_id++;
         }
 
 #ifdef BULK_XFER
-        DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer,
+#    ifdef SAMPLES_IN_MRAM
+            DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "mram_read_buf", 0, ALIGN(largest_size_xfer, 8),
                                  DPU_XFER_DEFAULT));
+#    else
+            DPU_ASSERT(dpu_push_xfer(dpu_rank, DPU_XFER_FROM_DPU, "read_buf", 0, largest_size_xfer,
+                                 DPU_XFER_DEFAULT));
+#    endif
 #endif
         dpu_id_rank = dpu_id;
     }

@@ -82,7 +82,7 @@ hamming_dist(uint32_t q[hd.bit_dim + 1], uint32_t *aM, int sims[CLASSES]) {
  * @param[in] mram_buf    MRAM array to read from at @p ind
  * @return                32bit read from @p mram_buf
  */
-static uint32_t
+uint32_t
 read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr *mram_buf) {
     __dma_aligned uint32_t buf[MINIMUM_MRAM_32B_READ];
     mram_read(&mram_buf[ind], buf, MINIMUM_MRAM_32B_READ * sizeof(uint32_t));

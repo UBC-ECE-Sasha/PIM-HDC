@@ -24,4 +24,9 @@ compute_N_gram(int input[hd.channels], uint32_t query[hd.bit_dim + 1]);
 int
 number_of_set_bits(uint32_t i);
 
+#ifndef HOST
+uint32_t
+read_32bits_from_mram(uint32_t ind, uint32_t __mram_ptr *mram_buf);
+#endif
+
 #endif
