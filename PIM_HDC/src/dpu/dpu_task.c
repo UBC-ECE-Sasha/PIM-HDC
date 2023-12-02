@@ -25,11 +25,12 @@ BARRIER_INIT(finish_barrier, NR_TASKLETS);
 __host dpu_input_data dpu_data;
 __host dpu_hdc_vars hd;
 
-__host int32_t read_buf[HDC_MAX_INPUT];
 __dma_aligned int32_t *output;
 
 #ifdef SAMPLES_IN_MRAM
 uint32_t __mram_noinit mram_read_buf[HDC_MAX_INPUT];
+#else
+__host int32_t read_buf[HDC_MAX_INPUT];
 #endif
 
 // MRAM
@@ -148,7 +149,21 @@ main() {
 
     if (idx == TASKLET_SETUP) {
 #ifdef SAMPLES_IN_MRAM
-        mram_write(output, mram_read_buf, out_size);
+        uint32_t current = 0;
+        while(1) {
+            uint32_t write_left = out_size - current;
+            uint32_t write_sz = MRAM_MAX_READ_SIZE;
+            if (write_left < MRAM_MAX_READ_SIZE) {
+                write_sz = ALIGN(write_left, 8);
+            }
+            printf("Tasklet %d: write out %u bytes\n", idx, write_sz);
+            mram_write(((uint8_t *)output)+current, ((uint8_t __mram_ptr *)mram_read_buf)+current, write_sz);
+            current += write_sz;
+            if (current >= out_size) {
+                break;
+            }
+        }
+
 #else
         (void) memcpy(read_buf, output, out_size);
 #endif

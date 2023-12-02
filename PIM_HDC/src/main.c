@@ -48,7 +48,7 @@ typedef struct hdc_data {
  * @brief   Input buffer for a DPU
  */
 typedef struct in_buffer {
-    int32_t buffer[HDC_MAX_INPUT];
+    int32_t *buffer;
     size_t buffer_size;
 } in_buffer;
 
@@ -197,6 +197,12 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
 
     dpu_input_data inputs[NR_DPUS];
     in_buffer read_bufs[NR_DPUS];
+    for (int i = 0; i < NR_DPUS; i++) {
+        read_bufs[i].buffer = malloc(sizeof(int32_t)*HDC_MAX_INPUT);
+        if (read_bufs[i].buffer == NULL) {
+            nomem();
+        }
+    }
 
     uint32_t dpu_id = 0;
     uint32_t dpu_id_rank = 0;
@@ -330,7 +336,14 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     rt->execution_time_launch = TIME_DIFFERENCE(start, end);
 
     TIME_NOW(&start);
-    uint32_t output_buffer[NR_DPUS][HDC_MAX_INPUT];
+    uint32_t *output_buffer[NR_DPUS];
+    for (int i = 0; i < NR_DPUS; i++) {
+        output_buffer[i] = malloc(sizeof(int32_t)*HDC_MAX_INPUT);
+        if (output_buffer[i] == NULL) {
+            nomem();
+        }
+    }
+
     dpu_id_rank = dpu_id = 0;
 
     // Copy out:
@@ -395,6 +408,11 @@ prepare_dpu(int32_t *data_set, int32_t *results, void *runtime) {
     TIME_NOW(&end);
 
     rt->execution_time_free = TIME_DIFFERENCE(start, end);
+
+    for (int i = 0; i < NR_DPUS; i++) {
+        free(read_bufs[i].buffer);
+        free(output_buffer[i]);
+    }
 
     return ret;
 }
