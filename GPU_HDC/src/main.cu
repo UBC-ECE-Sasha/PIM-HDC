@@ -207,7 +207,11 @@ setup_gpu_data(gpu_input_data *input, uint32_t buffer_channel_length,
 
     uint32_t num_splits = NR_BLOCKS*NR_THREADS;
 
-    uint32_t buffer_channel_lengths[NR_BLOCKS*NR_THREADS];
+    uint32_t *buffer_channel_lengths;
+    buffer_channel_lengths = (uint32_t *)malloc(NR_BLOCKS*NR_THREADS*sizeof(uint32_t));
+    if (buffer_channel_lengths == NULL) {
+        nomem();
+    }
     calculate_buffer_lengths(NR_BLOCKS*NR_THREADS, buffer_channel_lengths, buffer_channel_length);
 
     uint32_t loc = 0;
